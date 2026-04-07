@@ -2,7 +2,7 @@
 
 > Local-network file transfer. No cloud. No accounts. No limits.
 
-A cross-platform (Windows & Linux) peer-to-peer file transfer application using UDP for device discovery and TCP for reliable, encrypted file streaming. Think AirDrop, but for any machine on your LAN.
+A cross-platform (Windows & Linux) peer-to-peer file transfer application using UDP for device discovery and TCP for reliable, encrypted file streaming.
 
 ---
 
