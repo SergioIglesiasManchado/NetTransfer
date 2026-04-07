@@ -1,4 +1,5 @@
 # LanDrop
+
 > Local-network file transfer. No cloud. No accounts. No limits.
 
 A cross-platform (Windows & Linux) peer-to-peer file transfer application using UDP for device discovery and TCP for reliable, encrypted file streaming. Think AirDrop, but for any machine on your LAN.
@@ -26,6 +27,7 @@ Flow:
 ## Roadmap & Task List
 
 ### Block 0 — Tooling & Project Structure
+
 > Goal: A clean repo that compiles on day one, on both platforms.
 
 - [ ] Initialize CMake project (`CMakeLists.txt` at root)
@@ -47,6 +49,10 @@ Flow:
       ├── spdlog/
       └── openssl/       ← or link system OpenSSL
   ```
+
+```
+
+
 - [ ] Add `clang-format` config (`.clang-format` at root)
 - [ ] Add `spdlog` for logging (header-only, via FetchContent or submodule)
 - [ ] Add `GoogleTest` for unit testing (via CMake FetchContent)
@@ -79,16 +85,18 @@ Flow:
 
 #### 2a — Message Types
 ```
-DISCOVERY_BROADCAST   (UDP) — "I'm here, name=X, tcp_port=Y"
-DISCOVERY_REPLY       (UDP) — "Acknowledged, I'm Z"
-TRANSFER_OFFER        (TCP) — "I want to send you file F, size S"
-TRANSFER_ACCEPT       (TCP) — "Go ahead"
-TRANSFER_REJECT       (TCP) — "No thanks" + reason code
-DATA_CHUNK            (TCP) — Raw file bytes (no header per chunk)
-TRANSFER_DONE         (TCP) — "Finished. SHA-256 = <32 bytes>"
-TRANSFER_ACK          (TCP) — "Checksum OK / FAIL"
-ERROR                 (TCP) — Error code + UTF-8 message
-KEEPALIVE             (TCP) — Heartbeat during long transfers
+
+DISCOVERY_BROADCAST (UDP) — "I'm here, name=X, tcp_port=Y"
+DISCOVERY_REPLY (UDP) — "Acknowledged, I'm Z"
+TRANSFER_OFFER (TCP) — "I want to send you file F, size S"
+TRANSFER_ACCEPT (TCP) — "Go ahead"
+TRANSFER_REJECT (TCP) — "No thanks" + reason code
+DATA_CHUNK (TCP) — Raw file bytes (no header per chunk)
+TRANSFER_DONE (TCP) — "Finished. SHA-256 = <32 bytes>"
+TRANSFER_ACK (TCP) — "Checksum OK / FAIL"
+ERROR (TCP) — Error code + UTF-8 message
+KEEPALIVE (TCP) — Heartbeat during long transfers
+
 ```
 
 #### 2b — Base Header (all TCP messages)
@@ -126,23 +134,25 @@ Every TCP message starts with this fixed-size prefix:
 > Goal: Model every possible transfer state explicitly before writing network logic. This prevents impossible states and makes error handling obvious.
 
 ```
+
 IDLE
-  │  (user drops file / selects device)
-  ▼
-DISCOVERING        ← UDP broadcast sent, waiting for reply
-  │  (target found)
-  ▼
-OFFERING           ← TCP TRANSFER_OFFER sent, waiting for response
-  │  (ACCEPT received)     │  (REJECT received)
-  ▼                        ▼
-TRANSFERRING            REJECTED (→ IDLE)
-  │  (all chunks sent)
-  ▼
-VERIFYING          ← waiting for TRANSFER_ACK
-  │  (ACK = OK)           │  (ACK = FAIL or timeout)
-  ▼                       ▼
-DONE (→ IDLE)          ERROR (→ IDLE, notify user)
-```
+│ (user drops file / selects device)
+▼
+DISCOVERING ← UDP broadcast sent, waiting for reply
+│ (target found)
+▼
+OFFERING ← TCP TRANSFER_OFFER sent, waiting for response
+│ (ACCEPT received) │ (REJECT received)
+▼ ▼
+TRANSFERRING REJECTED (→ IDLE)
+│ (all chunks sent)
+▼
+VERIFYING ← waiting for TRANSFER_ACK
+│ (ACK = OK) │ (ACK = FAIL or timeout)
+▼ ▼
+DONE (→ IDLE) ERROR (→ IDLE, notify user)
+
+````
 
 - [ ] Implement `TransferState` enum class with all states above
 - [ ] Implement `TransferSession` class that owns one state machine per active transfer
@@ -304,7 +314,7 @@ cmake --build build --parallel
 
 # Run tests
 cd build && ctest --output-on-failure
-```
+````
 
 **Windows:** Ensure OpenSSL pre-built binaries are in `third_party/openssl/` or install via `vcpkg install openssl`.  
 **Linux:** `sudo apt install libssl-dev` or equivalent.
@@ -313,13 +323,13 @@ cd build && ctest --output-on-failure
 
 ## Current Status
 
-| Block | Status |
-|---|---|
+| Block                                 | Status         |
+| ------------------------------------- | -------------- |
 | Block 0 — Tooling & Project Structure | ⬜ Not started |
-| Block 1 — Cross-Platform Foundation | ⬜ Not started |
-| Block 2 — Protocol Definition | ⬜ Not started |
-| Block 3 — State Machine | ⬜ Not started |
-| Block 4 — Network Core | ⬜ Not started |
-| Block 5 — Security | ⬜ Not started |
-| Block 6 — GUI | ⬜ Not started |
-| Block 7 — Testing | ⬜ Not started |
+| Block 1 — Cross-Platform Foundation   | ⬜ Not started |
+| Block 2 — Protocol Definition         | ⬜ Not started |
+| Block 3 — State Machine               | ⬜ Not started |
+| Block 4 — Network Core                | ⬜ Not started |
+| Block 5 — Security                    | ⬜ Not started |
+| Block 6 — GUI                         | ⬜ Not started |
+| Block 7 — Testing                     | ⬜ Not started |
