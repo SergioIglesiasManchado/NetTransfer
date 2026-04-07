@@ -1,4 +1,4 @@
-# LanDrop
+# NetTransfer
 
 > Local-network file transfer. No cloud. No accounts. No limits.
 
@@ -30,8 +30,8 @@ Flow:
 
 > Goal: A clean repo that compiles on day one, on both platforms.
 
-- [ ] Initialize CMake project (`CMakeLists.txt` at root)
-- [ ] Set up directory structure:
+- [✅] Initialize CMake project (`CMakeLists.txt` at root)
+- [✅] Set up directory structure:
   ```
   landrop/
   ├── CMakeLists.txt
@@ -53,7 +53,7 @@ Flow:
 ```
 
 
-- [ ] Add `clang-format` config (`.clang-format` at root)
+- [✅] Add `clang-format` config (`.clang-format` at root)
 - [ ] Add `spdlog` for logging (header-only, via FetchContent or submodule)
 - [ ] Add `GoogleTest` for unit testing (via CMake FetchContent)
 - [ ] Set up CI build matrix: Windows + MSVC, Windows + MinGW, Linux + GCC, Linux + Clang
@@ -63,12 +63,12 @@ Flow:
 ### Block 1 — Cross-Platform Foundation (C++ & CMake)
 > Goal: Code compiles identically on Windows and Linux with no `#ifdef` soup in logic files.
 
-- [ ] Download Standalone Asio (`asio-1.x.x`) — drop `include/` folder into project, no install needed
-- [ ] Configure `CMakeLists.txt`:
-  - [ ] Add `-DASIO_STANDALONE` compile definition (no Boost)
-  - [ ] `if(WIN32)` → link `ws2_32`, `mswsock`
-  - [ ] `if(UNIX)` → link `pthread`
-  - [ ] `if(WIN32)` → link OpenSSL pre-built binaries; `if(UNIX)` → find system OpenSSL
+- [✅] Download Standalone Asio (`asio-1.x.x`) — drop `include/` folder into project, no install needed
+- [✅] Configure `CMakeLists.txt`:
+  - [✅] Add `-DASIO_STANDALONE` compile definition (no Boost)
+  - [✅] `if(WIN32)` → link `ws2_32`, `mswsock`
+  - [✅] `if(UNIX)` → link `pthread`
+  - [✅] `if(WIN32)` → link OpenSSL pre-built binaries; `if(UNIX)` → find system OpenSSL
 - [ ] Verify `asio::io_context` spins up and shuts down cleanly on both platforms
 - [ ] Write a trivial TCP echo server/client as a compile smoke test → delete after passing
 
