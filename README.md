@@ -123,9 +123,9 @@ Every TCP message starts with this fixed-size prefix:
 | `file_name` | `uint8_t[name_len]` | UTF-8 filename — **no path, stripped on sender side** |
 
 #### 2d — Serialization Rules
-- [ ] **Never** `memcpy` a struct directly onto the wire — compiler padding breaks cross-platform compatibility
-- [ ] Write explicit `serialize()` / `deserialize()` functions for every message type, field by field
-- [ ] All multi-byte integers go over the wire in **network byte order** (big-endian) — use `htonl` / `ntohl` / `htonll` / `ntohll`
+- [✅] **Never** `memcpy` a struct directly onto the wire — compiler padding breaks cross-platform compatibility
+- [✅] Write explicit `serialize()` / `deserialize()` functions for every message type, field by field
+- [✅] All multi-byte integers go over the wire in **network byte order** (big-endian) — use `htonl` / `ntohl` / `htonll` / `ntohll`
 - [ ] Validate `magic` and `version` before parsing any payload — drop and log unknown messages
 
 ---
