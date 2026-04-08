@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(NetTransfer
     src/main.cpp
     src/core/protocol.cpp
+    src/core/discovery.cpp
     # add more source files here as you create them
 )
 
