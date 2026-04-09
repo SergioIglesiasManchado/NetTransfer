@@ -16,6 +16,7 @@ add_executable(NetTransfer
 target_include_directories(NetTransfer PRIVATE
   third_party/asio/include
   include
+  third_party/openssl/include/openssl
 )
 target_compile_definitions(NetTransfer PRIVATE ASIO_STANDALONE)
 
