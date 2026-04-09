@@ -1,3 +1,4 @@
+#pragma once
 
 #include "asio.hpp"
 #include "protocol.h"
@@ -6,7 +7,7 @@
 #include <fstream>
 #include <functional>
 
-#define MAX_BUFFER_SIZE 4096
+#define MAX_BUFFER_SIZE 4096 // size in bytes
 
 class TransferSender {
 
@@ -19,8 +20,10 @@ private:
   uint8_t buffer[MAX_BUFFER_SIZE];
 
 public:
-  void setOnProgress(std::function<void(uint64_t bytes_sent, uint64_t total)>);
-  void setOnComplete(std::function<void(bool success)>);
+  TransferSender();
+
+  void setOnProgress(std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
+  void setOnComplete(std::function<void(bool success)> callback);
 
   bool start();
   bool stop();
@@ -35,9 +38,11 @@ private:
   uint8_t buffer[MAX_BUFFER_SIZE];
 
 public:
-  void setOnProgress(std::function<void(uint64_t bytes_sent, uint64_t total)>);
-  void setOnComplete(std::function<void(bool success)>);
-  void setOnOffer(std::function<void(OfferPayload)>);
+  TransferReceiver();
+
+  void setOnProgress(std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
+  void setOnComplete(std::function<void(bool success)> callback);
+  void setOnOffer(std::function<void(OfferPayload)> callback);
   void accept(uint64_t resume_offset);
   void reject(RejectReason reason);
 

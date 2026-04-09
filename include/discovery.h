@@ -8,7 +8,7 @@
 
 // time between searchs in seconds
 #define SEARCH_LOOP 5
-#define BUFFER_MAX_SIZE 512
+#define BUFFER_MAX_SIZE 512 // size in bytes
 
 struct DiscoveredDevice {
   std::string name;
