@@ -1,26 +1,37 @@
 #pragma once
 
 #include "asio.hpp"
+#include "asio/ssl.hpp"
 #include "protocol.h"
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 
-#define MAX_BUFFER_SIZE 4096 // size in bytes
+#define MAX_BUFFER_SIZE 32768 // size in bytes
 
 class TransferSender {
 
 private:
-  asio::ip::tcp::socket target_tcp_port;
-  asio::io_context io_context;
-  asio::io target_ip;
-  std::string file_path;
+  asio::io_context& io_context; 
+  asio::ssl::stream<asio::ip::tcp::socket> socket;
+  std::string target_ip; 
+  uint16_t target_port; 
+  std::string file_path; 
+  uint64_t session_id;
+  std::fstream file;
+  unsigned char sha256[32];
+  uint64_t file_size;
+  uint64_t bytes_sent;
 
   uint8_t buffer[MAX_BUFFER_SIZE];
 
+  void sendNextChunk();
+  std::function<void(uint64_t, uint64_t)> onProgress;
+  std::function<void(bool)> onComplete;
+
 public:
-  TransferSender();
+  TransferSender(asio::io_context &io, asio::ssl::context& ssl_ctx, std::string target_ip, uint16_t target_port, std::string file_path);
 
   void setOnProgress(std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
   void setOnComplete(std::function<void(bool success)> callback);
@@ -32,13 +43,21 @@ public:
 class TransferReceiver {
 
 private:
-  asio::io_context io_context;
-  asio::ip::tcp::socket tcp_port;
+  asio::io_context& io_context;
+  asio::ssl::stream<asio::ip::tcp::socket> socket;
+  asio::ip::tcp::acceptor acceptor;
+  OfferPayload pending_offer;
+  asio::ip::tcp::endpoint pending_sender;
+  std::fstream file;
 
   uint8_t buffer[MAX_BUFFER_SIZE];
 
+  std::function<void(uint64_t, uint64_t)> onProgress;
+  std::function<void(bool)> onComplete;
+  std::function<void(OfferPayload)> onOffer;
+
 public:
-  TransferReceiver();
+  TransferReceiver(asio::io_context &io, asio::ssl::context& ssl_ctx, uint16_t listen_port);
 
   void setOnProgress(std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
   void setOnComplete(std::function<void(bool success)> callback);
