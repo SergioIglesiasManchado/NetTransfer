@@ -23,6 +23,10 @@ Flow:
 ```
 
 ---
+## TODO list
+
+check for security/encryption if needed
+check the firewall config before executing actual service
 
 ## Roadmap & Task List
 
@@ -126,7 +130,7 @@ Every TCP message starts with this fixed-size prefix:
 - [✅] **Never** `memcpy` a struct directly onto the wire — compiler padding breaks cross-platform compatibility
 - [✅] Write explicit `serialize()` / `deserialize()` functions for every message type, field by field
 - [✅] All multi-byte integers go over the wire in **network byte order** (big-endian) — use `htonl` / `ntohl` / `htonll` / `ntohll`
-- [ ] Validate `magic` and `version` before parsing any payload — drop and log unknown messages
+- [✅] Validate `magic` and `version` before parsing any payload — drop and log unknown messages
 
 ---
 
@@ -165,11 +169,11 @@ DONE (→ IDLE) ERROR (→ IDLE, notify user)
 > Goal: Reliable, async file transfer that doesn't block the UI or eat all available RAM.
 
 #### 4a — UDP Discovery
-- [ ] Bind a UDP socket to `0.0.0.0:50000`
-- [ ] On startup, broadcast `DISCOVERY_BROADCAST` to `255.255.255.255:50000`
-- [ ] Listen for `DISCOVERY_BROADCAST` from others → reply with `DISCOVERY_REPLY` including device name and TCP port
-- [ ] Re-broadcast every 5 seconds (heartbeat) so late-joining devices appear
-- [ ] Track discovered devices in a list with a last-seen timestamp — remove devices not heard from in 15 seconds
+- [✅] Bind a UDP socket to `0.0.0.0:50000`
+- [✅] On startup, broadcast `DISCOVERY_BROADCAST` to `255.255.255.255:50000`
+- [✅] Listen for `DISCOVERY_BROADCAST` from others → reply with `DISCOVERY_REPLY` including device name and TCP port
+- [✅] Re-broadcast every 5 seconds (heartbeat) so late-joining devices appear
+- [✅] Track discovered devices in a list with a last-seen timestamp — remove devices not heard from in 15 seconds
 - [ ] **Firewall note (Windows):** prompt user for firewall permission on first launch; document the required inbound rule
 
 #### 4b — TCP Transfer (Sender side)
