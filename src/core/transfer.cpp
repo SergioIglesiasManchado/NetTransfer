@@ -1,3 +1,6 @@
+#ifdef _WIN32
+    #include <shlobj.h>
+#endif
 
 #include "transfer.h"
 #include "protocol.h"
@@ -118,7 +121,7 @@ bool TransferSender::stop() {
     return true;
 }
 
-void TransferSender::setOnProgress(std::function<void(uint64_t bytes_sent, uint64_t total)> callback) {
+void TransferSender::setOnProgress(std::function<void(uint64_t, uint64_t)> callback) {
     onProgress = callback;
 }
 
@@ -128,14 +131,25 @@ void TransferSender::setOnComplete(std::function<void(bool)> callback) {
 
 void TransferSender::sendNextChunk() {
 
-    file.read(reinterpret_cast<char*>(buffer), MAX_BUFFER_SIZE);
+    file.read(reinterpret_cast<char*>(buffer), MAX_BUFFER_SIZE - HEADER_SIZE);
     std::streamsize bytes_read = file.gcount();
     if (bytes_read > 0) {
         // keep on transfering
-        asio::async_write(socket, asio::buffer(buffer, bytes_read),
+        BaseHeader header;
+        header.magic = NT_MAGIC;
+        header.version = NT_VERSION;
+        header.msg_type = MessageType::DATA_CHUNK;
+        header.session_id = session_id;
+        header.payload_len = static_cast<uint32_t>(bytes_read);
+        header.header_crc = 0;
+
+        std::vector<uint8_t> message = serializeHeader(header);
+        message.insert(message.end(), buffer, buffer + bytes_read);
+
+        asio::async_write(socket, asio::buffer(message),
         [this](std::error_code ec, size_t bytes) {
             if (ec) { std::cerr << ec.message() << "\n"; onComplete(false); return; }
-            bytes_sent += bytes;
+            bytes_sent += bytes - HEADER_SIZE;
             onProgress(bytes_sent, file_size);
             sendNextChunk();
         });
@@ -158,7 +172,7 @@ void TransferSender::sendNextChunk() {
 
         // waiting for ack
         asio::async_read(socket, asio::buffer(buffer, HEADER_SIZE),
-            [this, header](std::error_code ec, size_t bytes) {
+            [this](std::error_code ec, size_t bytes) {
                 if (ec) { std::cerr << ec.message() << "\n"; onComplete(false); return; }
                 BaseHeader header;
                 deserializeHeader(buffer, header);
@@ -179,4 +193,222 @@ void TransferSender::sendNextChunk() {
                 }
         });
     }
+}
+
+
+TransferReceiver::TransferReceiver(asio::io_context &io, asio::ssl::context& ssl_ctx, uint16_t listen_port) 
+    : io_context(io), socket(io, ssl_ctx), acceptor(io, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), listen_port)) {
+
+    bytes_sent = 0;
+}
+
+bool TransferReceiver::start() {
+
+    try {
+        listenForConnections();
+    } catch (std::exception &e) {
+        std::cerr << "couldn't start receiver:\n" << e.what() << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool TransferReceiver::stop() {
+
+    try {
+        socket.shutdown();
+        socket.lowest_layer().close();
+        file.close();
+    } catch (std::exception& e) {
+        std::cerr << e.what() << "\n";
+        return false;
+    }
+    return true;
+}
+
+void TransferReceiver::listenForConnections() {
+    acceptor.async_accept(socket.lowest_layer(),
+    [this](std::error_code ec) {
+        if (ec) { std::cerr << ec.message() << "\n"; return; }
+        socket.async_handshake(asio::ssl::stream_base::server,
+        [this](std::error_code ec) {
+            if (ec) { std::cerr << ec.message() << "\n"; return; }
+            // expecting header, transfer offer
+            asio::async_read(socket, asio::buffer(buffer, HEADER_SIZE),
+            [this](std::error_code ec, size_t bytes) {
+                if (ec) { std::cerr << ec.message() << "\n"; return; }
+                BaseHeader header;
+                deserializeHeader(buffer, header);
+                if (header.msg_type != MessageType::TRANSFER_OFFER) {
+                    // not expected
+                    std::cerr << "received other than TRANSFER_OFFER\n";
+                    return;
+                }
+                if (header.payload_len > MAX_BUFFER_SIZE - HEADER_SIZE) {
+                    std::cerr << "payload too large\n";
+                    return;
+                }
+                pending_session_id = header.session_id;
+                asio::async_read(socket, asio::buffer(buffer + HEADER_SIZE, header.payload_len),
+                [this, header](std::error_code ec, size_t bytes) {
+                    if (ec) { std::cerr << ec.message() << "\n"; return; }
+                    OfferPayload op;
+                    deserializeOffer(buffer + HEADER_SIZE, header.payload_len, op);
+                    pending_offer = op;
+                    file_size = pending_offer.file_size;
+                    onOffer(op);
+                    listenForConnections();
+                });
+            });
+        });
+    });
+}
+
+void TransferReceiver::accept(uint64_t resume_offset) {
+    // TODO: send resume_offset in payload when resumable transfers are implemented
+
+    BaseHeader header;
+    header.magic = NT_MAGIC;
+    header.version = NT_VERSION;
+    header.msg_type = MessageType::TRANSFER_ACCEPT;
+    header.session_id = pending_session_id;
+    header.payload_len = 0;
+    header.header_crc = 0;
+
+    std::vector<uint8_t> message = serializeHeader(header);
+    asio::write(socket, asio::buffer(message));
+
+    std::filesystem::path downloads = getDownloadsFolder();
+    std::filesystem::path filepath = resolveFilePath(downloads, pending_offer.file_name);
+    file.open(filepath, std::ios::binary | std::ios::out);
+    if (!file.is_open()) {
+        std::cerr << "file couldn't be created\n";
+        return;
+    }
+
+    receiveNextChunk();
+}
+
+void TransferReceiver::reject(RejectReason reason) {
+
+    RejectPayload rp;
+    rp.reason = reason;
+    std::vector<uint8_t> payload = serializeReject(rp);
+
+    BaseHeader header;
+    header.magic = NT_MAGIC;
+    header.version = NT_VERSION;
+    header.msg_type = MessageType::TRANSFER_REJECT;
+    header.session_id = pending_session_id;
+    header.payload_len = static_cast<uint32_t>(payload.size());
+    header.header_crc = 0;
+
+    std::vector<uint8_t> message = serializeHeader(header);
+    message.insert(message.end(), payload.begin(), payload.end());
+    asio::write(socket, asio::buffer(message));
+
+    socket.shutdown();
+    socket.lowest_layer().close();
+}
+
+void TransferReceiver::receiveNextChunk() {
+    
+    asio::async_read(socket, asio::buffer(buffer, HEADER_SIZE),
+    [this](std::error_code ec, size_t bytes) {
+        if (ec) { std::cerr << ec.message() << "\n"; return; }
+        BaseHeader header;
+        deserializeHeader(buffer, header);
+        if (header.msg_type == MessageType::DATA_CHUNK) {
+            // keep on receiving
+            asio::async_read(socket, asio::buffer(buffer + HEADER_SIZE, MAX_BUFFER_SIZE - HEADER_SIZE),
+            [this](std::error_code ec, size_t bytes) {
+                if (ec) { std::cerr << ec.message() << "\n"; return; }
+                file.write(reinterpret_cast<char*>(buffer + HEADER_SIZE), bytes);
+                bytes_sent += bytes;
+                onProgress(bytes_sent, file_size);
+                receiveNextChunk();
+            });
+        } else if (header.msg_type == MessageType::TRANSFER_DONE) {
+            // nice, finished, close file and exit
+            file.close();
+            file.open(filepath, std::ios::binary | std::ios::in);
+            file.seekg(0, std::ios::beg);
+            unsigned char sha256[32];
+            SHA256_CTX c;
+            if (SHA256_Init(&c) != 1) return;
+            uint8_t sha_buffer[MAX_BUFFER_SIZE];
+            while (file) {
+                file.read(reinterpret_cast<char*>(sha_buffer), MAX_BUFFER_SIZE);
+                std::streamsize bytes_read = file.gcount();  // how many bytes actually read
+                if (bytes_read > 0) {
+                    SHA256_Update(&c, sha_buffer, bytes_read);
+                }
+            }
+            SHA256_Final(sha256, &c);
+            // compare sha256 key
+            AckPayload ap;
+            ap.checksum_ok = (memcmp(sha256, pending_offer.sha256, 32) == 0);
+
+            // send ack to sender
+            BaseHeader ackHeader;
+            ackHeader.magic = NT_MAGIC;
+            ackHeader.version = NT_VERSION;
+            ackHeader.msg_type = MessageType::TRANSFER_ACK;
+            ackHeader.session_id = pending_session_id;
+            std::vector<uint8_t> ackPayload = serializeAck(ap);
+            ackHeader.header_crc = 0;
+            ackHeader.payload_len = static_cast<uint32_t>(ackPayload.size());
+            std::vector<uint8_t> ackMessage = serializeHeader(ackHeader);
+            ackMessage.insert(ackMessage.end(), ackPayload.begin(), ackPayload.end());
+            asio::write(socket, asio::buffer(ackMessage));
+
+            // notify UI
+            onComplete(ap.checksum_ok);
+            file.close();
+        } else {
+            std::cerr << "unexpected msg when receiving packet\n";
+            return;
+        }
+    });
+}
+
+std::filesystem::path getDownloadsFolder() {
+#ifdef _WIN32
+    PWSTR path = nullptr;
+    SHGetKnownFolderPath(FOLDERID_Downloads, 0, nullptr, &path);
+    std::filesystem::path downloads(path);
+    CoTaskMemFree(path);  // must free after use
+    return downloads;
+#else
+    const char* xdg = getenv("XDG_DOWNLOAD_DIR");
+    if (xdg) return std::filesystem::path(xdg);
+    const char* home = getenv("HOME");
+    if (home) return std::filesystem::path(home) / "Downloads";
+    return std::filesystem::path(".");  // fallback, shouldn't happen
+#endif
+}
+
+std::filesystem::path resolveFilePath(const std::filesystem::path& dir, const std::string& filename) {
+    std::filesystem::path candidate = dir / filename;
+    if (!std::filesystem::exists(candidate)) return candidate;
+
+    std::string stem = candidate.stem().string();
+    std::string ext  = candidate.extension().string();
+    int counter = 1;
+    while (std::filesystem::exists(candidate)) {
+        candidate = dir / (stem + " (" + std::to_string(counter++) + ")" + ext);
+    }
+    return candidate;
+}
+
+void TransferReceiver::setOnProgress(std::function<void(uint64_t, uint64_t)> callback) {
+    onProgress = callback;
+}
+
+void TransferReceiver::setOnComplete(std::function<void(bool)> callback) {
+    onComplete = callback;
+}
+
+void TransferReceiver::setOnOffer(std::function<void(OfferPayload)> callback) {
+    onOffer = callback;
 }

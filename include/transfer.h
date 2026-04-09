@@ -48,10 +48,15 @@ private:
   asio::ip::tcp::acceptor acceptor;
   OfferPayload pending_offer;
   asio::ip::tcp::endpoint pending_sender;
+  uint64_t pending_session_id;
   std::fstream file;
+  uint64_t file_size;
+  uint64_t bytes_sent;
 
   uint8_t buffer[MAX_BUFFER_SIZE];
 
+  listenForConnections();
+  receiveNextChunk();
   std::function<void(uint64_t, uint64_t)> onProgress;
   std::function<void(bool)> onComplete;
   std::function<void(OfferPayload)> onOffer;

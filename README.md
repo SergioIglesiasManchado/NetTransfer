@@ -25,8 +25,8 @@ Flow:
 ---
 ## TODO list
 
-check for security/encryption if needed
 check the firewall config before executing actual service
+add resumable transfers (already defined, need to implement payload and sending)
 
 ## Roadmap & Task List
 
