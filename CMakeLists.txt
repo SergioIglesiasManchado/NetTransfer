@@ -32,10 +32,17 @@ if(WIN32)
   target_link_libraries(NetTransfer PRIVATE ws2_32 mswsock)
 elseif(UNIX)
     find_package(Threads REQUIRED)
-    target_link_libraries(NetTransfer PRIVATE Threads::Threads)
+    target_link_libraries(NetTransfer PRIVATE
+      Threads::Threads
+      OpenSSL::SSL
+      OpenSSL::Crypto
+      dl
+    )
 endif()
 
 # ── Openssl linking ────────────────────────────────────────────────────────
 # Define the path to your local OpenSSL
 find_package(OpenSSL REQUIRED)
 target_link_libraries(NetTransfer PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+
+set(OPENSSL_USE_STATIC_LIBS TRUE)
