@@ -58,6 +58,7 @@ private:
   std::string file_path;
   uint64_t file_size;
   uint64_t bytes_sent;
+  uint16_t listen_port;
 
   uint8_t buffer[MAX_BUFFER_SIZE];
 
@@ -77,6 +78,7 @@ public:
   void setOnOffer(std::function<void(OfferPayload)> callback);
   void accept(uint64_t resume_offset);
   void reject(RejectReason reason);
+  uint16_t TransferReceiver::getPort();
 
   bool start();
   bool stop();

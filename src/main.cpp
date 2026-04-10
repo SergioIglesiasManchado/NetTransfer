@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
     while (true) {
 
         // input loop
-        std::cout << "select option: (l) list, (s <file>) send file, (q) quit: \n";
+        std::cout << "select option: (l) list, (s) send file, (q) quit: \n";
         char input;
         std::cin >> input;
         if (input == 'l') {

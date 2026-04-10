@@ -61,8 +61,17 @@ bool TransferSender::start() {
   // connect to target device
   asio::ip::tcp::endpoint endpoint(asio::ip::make_address(target_ip),
                                    target_port);
-  socket.lowest_layer().connect(endpoint);
-  socket.handshake(asio::ssl::stream_base::client);
+  // TODO remove couts, just for DEBUG
+  try {
+    std::cout << "connecting to " << target_ip << ":" << target_port << "\n";
+    socket.lowest_layer().connect(endpoint);
+    std::cout << "connected, starting handshake\n";
+    socket.handshake(asio::ssl::stream_base::client);
+    std::cout << "handshake done, sending offer\n";
+  } catch (std::exception& e) {
+    std::cerr << "connection failed: " << e.what() << "\n";
+    return false;
+  }
 
   // send a transfer offer
   BaseHeader header;
@@ -237,20 +246,38 @@ TransferReceiver::TransferReceiver(asio::io_context &io,
                                    asio::ssl::context &ssl_ctx,
                                    uint16_t listen_port)
     : io_context(io), socket(io, ssl_ctx),
-      acceptor(io, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), listen_port)) {
+      acceptor(io), listen_port(listen_port) {
 
   bytes_sent = 0;
 }
 
 bool TransferReceiver::start() {
-
-  try {
-    listenForConnections();
-  } catch (std::exception &e) {
-    std::cerr << "couldn't start receiver:\n" << e.what() << "\n";
-    return false;
-  }
-  return true;
+    try {
+        bool bound = false;
+        for (uint16_t port = listen_port; port <= TCP_PORT_MAX; port++) {
+            try {
+                acceptor.open(asio::ip::tcp::v4());
+                acceptor.bind(asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port));
+                acceptor.listen();
+                listen_port = port;
+                bound = true;
+                std::cout << "listening on port " << port << "\n";
+                break;
+            } catch (std::exception&) {
+                acceptor.close();
+                continue;
+            }
+        }
+        if (!bound) {
+            std::cerr << "no available ports in range\n";
+            return false;
+        }
+        listenForConnections();
+    } catch (std::exception &e) {
+        std::cerr << "couldn't start receiver:\n" << e.what() << "\n";
+        return false;
+    }
+    return true;
 }
 
 bool TransferReceiver::stop() {
@@ -489,3 +516,5 @@ void TransferReceiver::setOnComplete(std::function<void(bool)> callback) {
 void TransferReceiver::setOnOffer(std::function<void(OfferPayload)> callback) {
   onOffer = callback;
 }
+
+uint16_t TransferReceiver::getPort() { return listen_port; }

@@ -26,6 +26,7 @@ bool NetTransfer::start() {
     if (!fine) return false;
     fine = receiver.start();
     if (!fine) return false;
+    discovery.setTcpPort(receiver.getPort());
 
     io_thread = std::thread([this]() {
         io.run();
@@ -49,6 +50,8 @@ bool NetTransfer::stop() {
 bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
 
     // get device info from discoveryDevice, call callbacks and start sender
+    // TODO delete, is DEBUG
+    std::cout << "sendFile called: " << file_path << "\n";
     auto sender = std::make_shared<TransferSender>(io, ssl_ctx, target.ip, target.tcp_port, file_path);
     if (onProgress) sender->setOnProgress(onProgress);
     if (onComplete) sender->setOnComplete([this, sender](bool success) {

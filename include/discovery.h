@@ -39,6 +39,7 @@ public:
   bool start();
   bool stop();
   std::vector<DiscoveredDevice> getDevices();
+  void setTcpPort(uint16_t port);
   void setOnDeviceFound(std::function<void(DiscoveredDevice)> callback);
   void setOnDeviceLeft(std::function<void(DiscoveredDevice)> callback);
 };

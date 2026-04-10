@@ -33,7 +33,8 @@ bool DiscoveryService::start() {
     // set broadcast
     asio::socket_base::broadcast option(true);
     udp_socket.set_option(option);
-
+    udp_socket.set_option(asio::ip::udp::socket::reuse_address(true));
+    
     // bind to ip
     asio::ip::udp::endpoint endpoint(asio::ip::make_address("0.0.0.0"),
                                      UDP_DISCOVERY_PORT);
@@ -233,6 +234,11 @@ void DiscoveryService::sendBroadcast() {
             listenForPackages();
             return;
           }
+          // check for myself
+          if (dp.device_name == device_name) {
+              listenForPackages();
+              return;
+          }
           bool deviceInList = false;
           for (int i = 0; i < discoveredDevices.size(); i++) {
             if (discoveredDevices[i].name == dp.device_name) {
@@ -261,4 +267,8 @@ void DiscoveryService::sendBroadcast() {
 
         listenForPackages();
       });
+}
+
+void DiscoveryService::setTcpPort(uint16_t port) {
+  this->tcp_port = port;
 }
