@@ -143,33 +143,33 @@ void DiscoveryService::sendBroadcast() {
   }
 }
 
-void DiscoveryService::listenForPackages() {
+  void DiscoveryService::listenForPackages() {
 
-  auto sender = std::make_shared<asio::ip::udp::endpoint>();
+    auto sender = std::make_shared<asio::ip::udp::endpoint>();
 
-  udp_socket.async_receive_from(
-      asio::buffer(buffer_incoming, BUFFER_MAX_SIZE), *sender,
-      [this, sender](std::error_code ec, size_t bytes) {
-        // check for errors in lambda
-        if (ec) {
-          std::cerr << ec.message() << "\n";
-          return;
-        }
-        if (sender->address() == udp_socket.local_endpoint().address()) {
-          listenForPackages();
-          return;
-        }
+    udp_socket.async_receive_from(
+        asio::buffer(buffer_incoming, BUFFER_MAX_SIZE), *sender,
+        [this, sender](std::error_code ec, size_t bytes) {
+          // check for errors in lambda
+          if (ec) {
+            std::cerr << ec.message() << "\n";
+            return;
+          }
+          if (sender->address() == udp_socket.local_endpoint().address()) {
+            listenForPackages();
+            return;
+          }
 
-        // first, read header, identify type of packet (either broadcast or
-        // response to our broadcast)
-        BaseHeader base;
-        if (!deserializeHeader(buffer_incoming, base)) {
-          // error, throw exception
-          std::cerr << "failed to deserialize header\n";
-          listenForPackages();
-          return;
-        }
-        switch (base.msg_type) {
+          // first, read header, identify type of packet (either broadcast or
+          // response to our broadcast)
+          BaseHeader base;
+          if (!deserializeHeader(buffer_incoming, base)) {
+            // error, throw exception
+            std::cerr << "failed to deserialize header\n";
+            listenForPackages();
+            return;
+          }
+          switch (base.msg_type) {
         case MessageType::DISCOVERY_BROADCAST: {
           DiscoveryPayload dp;
           if (!deserializeDiscovery(buffer_incoming + HEADER_SIZE,
@@ -177,6 +177,11 @@ void DiscoveryService::listenForPackages() {
             std::cerr << "failed to deserialize payload\n";
             listenForPackages();
             return;
+          }
+          // check if it's mysef
+          if (dp.device_name == device_name) {
+              listenForPackages();
+              return;
           }
           // if device in list, update last_seen, if not, add to list
           bool deviceInList = false;

@@ -58,6 +58,13 @@ bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
     return sent;
 }
 
+std::vector<DiscoveredDevice> NetTransfer::getDevices() {
+    return discovery.getDevices();
+}
+
+void NetTransfer::accept() { receiver.accept(0); }
+void NetTransfer::reject(RejectReason reason) { receiver.reject(reason); }
+
 void NetTransfer::setOnDeviceFound(
     std::function<void(DiscoveredDevice)> callback) {
   onDeviceFound = callback;

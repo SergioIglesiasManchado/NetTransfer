@@ -10,7 +10,7 @@ class NetTransfer {
 
     private:
         asio::io_context io;
-        asio::ssl::context ssl_cxt;
+        asio::ssl::context ssl_ctx;
         DiscoveryService discovery;
         TransferReceiver receiver;
         std::thread io_thread;
@@ -27,7 +27,10 @@ class NetTransfer {
         NetTransfer(std::string device_name, uint16_t tcp_port);
         bool start();
         bool stop();
+        void accept();
+        void reject(RejectReason reason);
         bool sendFile(DiscoveredDevice target, std::string file_path);
+        std::vector<DiscoveredDevice> getDevices(); 
 
         void setOnDeviceFound(std::function<void(DiscoveredDevice)> callback);
         void setOnDeviceLeft(std::function<void(DiscoveredDevice)> callback);
