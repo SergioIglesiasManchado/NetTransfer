@@ -31,12 +31,13 @@ TransferSender::TransferSender(asio::io_context &io,
 bool TransferSender::start() {
 
   // open the file
-  file.open(file_path, std::ios::binary);
+  file.open(file_path, std::fstream::binary | std::fstream::in);
   if (file.is_open()) {
     file.seekg(0, std::ios::end);
     file_size = file.tellg();
     file.seekg(0, std::ios::beg);
   } else {
+    std::cout << "file not opened\n";
     return false;
   }
 
