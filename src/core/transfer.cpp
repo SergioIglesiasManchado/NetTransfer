@@ -6,6 +6,9 @@
 #include "protocol.h"
 #include <random>
 
+std::filesystem::path getDownloadsFolder();
+std::filesystem::path resolveFilePath(const std::filesystem::path& dir, const std::string& filename);
+
 TransferSender::TransferSender(asio::io_context &io, asio::ssl::context& ssl_ctx, std::string target_ip, uint16_t target_port, std::string file_path)
     : io_context(io), socket(io, ssl_ctx), target_ip(target_ip), target_port(target_port), file_path(file_path) {
 
@@ -92,7 +95,7 @@ bool TransferSender::start() {
             }
         } else if (header.msg_type == MessageType::TRANSFER_REJECT) {
             asio::async_read(socket, asio::buffer(buffer, header.payload_len),
-            [this](std::error_code ec, size_t bytes) {
+            [this, &header](std::error_code ec, size_t bytes) {
                 if (ec) { std::cerr << ec.message() << "\n"; onComplete(false); return; }
                 RejectPayload rp;
                 deserializeReject(buffer, header.payload_len, rp); // we have reason for reject
@@ -102,10 +105,11 @@ bool TransferSender::start() {
             });
         } else {
             std::cerr << "unexpected header type\n";
+            return;
         }
 
     });
-
+    return true;
 }
 
 bool TransferSender::stop() {
@@ -178,7 +182,7 @@ void TransferSender::sendNextChunk() {
                 deserializeHeader(buffer, header);
                 if (header.msg_type == MessageType::TRANSFER_ACK) {
                     asio::async_read(socket, asio::buffer(buffer, header.payload_len),
-                    [this](std::error_code ec, size_t bytes) {
+                    [this, &header](std::error_code ec, size_t bytes) {
                         if (ec) { std::cerr << ec.message() << "\n"; onComplete(false); return; }
                         AckPayload ap;
                         deserializeAck(buffer, header.payload_len, ap); 
@@ -280,6 +284,7 @@ void TransferReceiver::accept(uint64_t resume_offset) {
 
     std::filesystem::path downloads = getDownloadsFolder();
     std::filesystem::path filepath = resolveFilePath(downloads, pending_offer.file_name);
+    file_path = filepath.string();
     file.open(filepath, std::ios::binary | std::ios::out);
     if (!file.is_open()) {
         std::cerr << "file couldn't be created\n";
@@ -331,7 +336,7 @@ void TransferReceiver::receiveNextChunk() {
         } else if (header.msg_type == MessageType::TRANSFER_DONE) {
             // nice, finished, close file and exit
             file.close();
-            file.open(filepath, std::ios::binary | std::ios::in);
+            file.open(file_path, std::ios::binary | std::ios::in);
             file.seekg(0, std::ios::beg);
             unsigned char sha256[32];
             SHA256_CTX c;

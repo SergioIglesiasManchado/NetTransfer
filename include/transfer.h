@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iostream>
 
 #define MAX_BUFFER_SIZE 32768 // size in bytes
 
@@ -50,13 +51,14 @@ private:
   asio::ip::tcp::endpoint pending_sender;
   uint64_t pending_session_id;
   std::fstream file;
+  std::string file_path;
   uint64_t file_size;
   uint64_t bytes_sent;
 
   uint8_t buffer[MAX_BUFFER_SIZE];
 
-  listenForConnections();
-  receiveNextChunk();
+  void listenForConnections();
+  void receiveNextChunk();
   std::function<void(uint64_t, uint64_t)> onProgress;
   std::function<void(bool)> onComplete;
   std::function<void(OfferPayload)> onOffer;
