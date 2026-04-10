@@ -109,7 +109,7 @@ bool TransferSender::start() {
           }
         } else if (header.msg_type == MessageType::TRANSFER_REJECT) {
           asio::async_read(socket, asio::buffer(buffer, header.payload_len),
-                           [this, &header](std::error_code ec, size_t bytes) {
+                           [this, header](std::error_code ec, size_t bytes) {
                              if (ec) {
                                std::cerr << ec.message() << "\n";
                                onComplete(false);
@@ -212,7 +212,7 @@ void TransferSender::sendNextChunk() {
                        if (header.msg_type == MessageType::TRANSFER_ACK) {
                          asio::async_read(
                              socket, asio::buffer(buffer, header.payload_len),
-                             [this, &header](std::error_code ec, size_t bytes) {
+                             [this, header](std::error_code ec, size_t bytes) {
                                if (ec) {
                                  std::cerr << ec.message() << "\n";
                                  onComplete(false);

@@ -29,9 +29,8 @@ check the firewall config before executing actual service
 add resumable transfers (already defined, need to implement payload and sending)
 
 for compiling on windows:
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
-cd build
-cmake --build .
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
+cmake --build build
 
 check in linux if it compiles or not
 
