@@ -23,10 +23,17 @@ Flow:
 ```
 
 ---
+## IMPORTANT
+
+Windows Defender Firewall → Inbound Rules → New Rule
+→ Port → UDP → 50000 → Allow → All profiles → Name: "NetTransfer Discovery"
+
 ## TODO list
 
+specify the firewall rules needed for both windows and linux
 check the firewall config before executing actual service
 add resumable transfers (already defined, need to implement payload and sending)
+add the tls actual handshake verification in block 5
 
 for compiling on windows:
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
@@ -164,10 +171,10 @@ DONE (→ IDLE) ERROR (→ IDLE, notify user)
 
 ````
 
-- [ ] Implement `TransferState` enum class with all states above
-- [ ] Implement `TransferSession` class that owns one state machine per active transfer
-- [ ] Any network event that arrives in an unexpected state → log + send `ERROR` message + transition to `IDLE`
-- [ ] Make `TransferSession` thread-safe: network thread and UI thread both touch it
+- [✅] Implement `TransferState` enum class with all states above
+- [✅] Implement `TransferSession` class that owns one state machine per active transfer
+- [✅] Any network event that arrives in an unexpected state → log + send `ERROR` message + transition to `IDLE`
+- [✅] Make `TransferSession` thread-safe: network thread and UI thread both touch it
 
 ---
 
@@ -183,31 +190,31 @@ DONE (→ IDLE) ERROR (→ IDLE, notify user)
 - [ ] **Firewall note (Windows):** prompt user for firewall permission on first launch; document the required inbound rule
 
 #### 4b — TCP Transfer (Sender side)
-- [ ] Open `asio::ssl::stream<tcp::socket>` to the target's IP and TCP port
+- [✅] Open `asio::ssl::stream<tcp::socket>` to the target's IP and TCP port
 - [ ] Complete TLS handshake (verify peer certificate / key fingerprint)
-- [ ] Send `TRANSFER_OFFER` — wait for `TRANSFER_ACCEPT` or `TRANSFER_REJECT`
-- [ ] Open file in binary read mode
+- [✅] Send `TRANSFER_OFFER` — wait for `TRANSFER_ACCEPT` or `TRANSFER_REJECT`
+- [✅] Open file in binary read mode
 - [ ] If `resume_offset > 0` in the ACCEPT, seek to that offset before reading
-- [ ] Loop: read chunk from disk → `async_write` to socket
+- [✅] Loop: read chunk from disk → `async_write` to socket
   - Chunk size: start at 32 KB; tune later based on measured throughput
   - Do **not** buffer more than 2 chunks ahead — prevent unbounded RAM growth if disk > network speed
-- [ ] After last chunk, send `TRANSFER_DONE` with SHA-256
-- [ ] Wait for `TRANSFER_ACK` → report success or failure to UI
+- [✅] After last chunk, send `TRANSFER_DONE` with SHA-256
+- [✅] Wait for `TRANSFER_ACK` → report success or failure to UI
 
 #### 4c — TCP Transfer (Receiver side)
-- [ ] `asio::ip::tcp::acceptor` listens on a port in range `50001–50100` (first available)
-- [ ] On new connection, complete TLS handshake
-- [ ] Read and validate base header → parse `TRANSFER_OFFER`
-- [ ] Prompt user (or auto-accept based on settings) → send `TRANSFER_ACCEPT` or `TRANSFER_REJECT`
-- [ ] Detect system Downloads folder:
+- [✅] `asio::ip::tcp::acceptor` listens on a port in range `50001–50100` (first available)
+- [✅] On new connection, complete TLS handshake
+- [✅] Read and validate base header → parse `TRANSFER_OFFER`
+- [✅] Prompt user (or auto-accept based on settings) → send `TRANSFER_ACCEPT` or `TRANSFER_REJECT`
+- [✅] Detect system Downloads folder:
   - Windows: `FOLDERID_Downloads` via `SHGetKnownFolderPath`
   - Linux: `$XDG_DOWNLOAD_DIR` or `$HOME/Downloads` fallback
-- [ ] Open destination file for writing (handle name collisions: append ` (1)`, ` (2)`, etc.)
-- [ ] Loop: `async_read` chunk → write to disk
-- [ ] On `TRANSFER_DONE`: compute SHA-256 of received file → compare → send `TRANSFER_ACK`
+- [✅] Open destination file for writing (handle name collisions: append ` (1)`, ` (2)`, etc.)
+- [✅] Loop: `async_read` chunk → write to disk
+- [✅] On `TRANSFER_DONE`: compute SHA-256 of received file → compare → send `TRANSFER_ACK`
 
 #### 4d — Threading Model
-- [ ] One dedicated thread runs `io_context.run()` — never block it
+- [✅] One dedicated thread runs `io_context.run()` — never block it
 - [ ] Use `asio::strand` to serialize callbacks that touch shared state (device list, session map)
 - [ ] UI thread communicates with network thread via a thread-safe queue (or `asio::post()` onto the io_context)
 - [ ] Implement a 30-second `KEEPALIVE` timer during transfers — abort if no response in 10 seconds

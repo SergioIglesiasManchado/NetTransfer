@@ -13,6 +13,8 @@ bool NetTransfer::start() {
     // load ssl
     ssl_ctx.use_certificate_file("cert.pem", asio::ssl::context::pem);
     ssl_ctx.use_private_key_file("key.pem", asio::ssl::context::pem);
+    // TODO disabled security for now, will be fully implemented later on
+    ssl_ctx.set_verify_mode(asio::ssl::verify_none);
 
     // callbacks
     discovery.setOnDeviceFound(onDeviceFound);
