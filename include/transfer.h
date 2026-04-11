@@ -9,6 +9,7 @@
 #include <functional>
 #include <iostream>
 #include <openssl/evp.h>
+#include <openssl/ssl.h>
 
 #define MAX_BUFFER_SIZE 32768 // size in bytes
 
@@ -49,7 +50,8 @@ class TransferReceiver {
 
 private:
   asio::io_context &io_context;
-  asio::ssl::stream<asio::ip::tcp::socket> socket;
+  asio::ssl::context &ssl_context;
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket>> socket;
   asio::ip::tcp::acceptor acceptor;
   OfferPayload pending_offer;
   asio::ip::tcp::endpoint pending_sender;

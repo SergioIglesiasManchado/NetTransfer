@@ -5,12 +5,15 @@
 #include "discovery.h"
 #include "transfer.h"
 #include <thread>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 class NetTransfer {
 
     private:
         asio::io_context io;
         asio::ssl::context ssl_ctx;
+        asio::ssl::context client_ctx;
         DiscoveryService discovery;
         TransferReceiver receiver;
         std::thread io_thread;

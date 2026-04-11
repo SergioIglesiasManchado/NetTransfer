@@ -22,6 +22,7 @@ add_executable(NetTransfer
     src/core/NetTransfer.cpp
     # add more source files here as you create them
 )
+add_executable(uninstall_rules src/uninstall_rules.cpp)
 
 # ── Asio (header-only, standalone) ─────────────────────────────────────────────
 target_include_directories(NetTransfer PRIVATE

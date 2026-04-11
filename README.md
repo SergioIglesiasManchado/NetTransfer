@@ -64,7 +64,6 @@ check in linux if it compiles or not
   ├── tests/
   └── third_party/
       ├── spdlog/
-      └── openssl/       ← or link system OpenSSL
   ```
 
 ```

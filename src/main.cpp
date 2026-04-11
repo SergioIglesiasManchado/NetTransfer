@@ -1,7 +1,36 @@
 #include "NetTransfer.h"
 #include <iostream>
+#include <openssl/opensslv.h>
+
+#ifdef _WIN32
+    #include <cstdlib>
+
+    bool firewallRuleExists(const std::string& name) {
+        std::string cmd = "netsh advfirewall firewall show rule name=\"" + name + "\" >nul 2>&1";
+        return system(cmd.c_str()) == 0;  // returns 0 if rule exists
+    }
+
+    void addFirewallRules() {
+        if (!firewallRuleExists("NetTransfer UDP")) {
+            system("netsh advfirewall firewall add rule name=\"NetTransfer UDP\" "
+                "protocol=UDP dir=in localport=50000 action=allow >nul 2>&1");
+            std::cout << "Added firewall rule: NetTransfer UDP\n";
+        }
+        if (!firewallRuleExists("NetTransfer TCP")) {
+            system("netsh advfirewall firewall add rule name=\"NetTransfer TCP\" "
+                "protocol=TCP dir=in localport=50001-50100 action=allow >nul 2>&1");
+            std::cout << "Added firewall rule: NetTransfer TCP\n";
+        }
+    }
+#endif
 
 int main(int argc, char *argv[]) { 
+
+    #ifdef _WIN32
+        addFirewallRules();
+    #endif
+
+    std::cout << "OpenSSL version: " << OpenSSL_version(OPENSSL_VERSION) << "\n";
     
     std::string device_name;
     uint16_t tcp_port;
@@ -18,20 +47,20 @@ int main(int argc, char *argv[]) {
     net.setOnDeviceFound([](DiscoveredDevice d) {
         std::cout << "device found: " << d.name << " (" << d.ip << ")\n";
     });
-    net.setOnOffer([&net](OfferPayload offer) {
-        std::cout << "incoming file: " << offer.file_name 
+
+    std::atomic<bool> pendingOffer{false};
+    net.setOnOffer([&net, &pendingOffer](OfferPayload offer) {
+        std::cout << "\nincoming file: " << offer.file_name 
                 << " (" << offer.file_size << " bytes)\n";
         std::cout << "accept? (y/n): ";
-        std::string ans;
-        std::getline(std::cin, ans);
-        if (ans == "y") net.accept();
-        else net.reject(RejectReason::USER_DECLINED);
+        pendingOffer = true;
     });
     net.setOnProgress([](uint64_t sent, uint64_t total) {
         std::cout << "progress: " << sent << "/" << total << "\n";
     });
-    net.setOnComplete([](bool ok) {
+    net.setOnComplete([&pendingOffer](bool ok) {
         std::cout << (ok ? "transfer complete\n" : "transfer failed\n");
+        if (ok) pendingOffer = false;
     });
 
     bool fine = net.start();
@@ -44,8 +73,18 @@ int main(int argc, char *argv[]) {
 
         // input loop
         std::cout << "select option: (l) list, (s) send file, (q) quit: \n";
-        char input;
-        std::cin >> input;
+        std::string line;
+        std::getline(std::cin, line);
+        if (line.empty()) continue;
+
+        if (pendingOffer) {
+            pendingOffer = false;
+            if (line == "y") net.accept();
+            else net.reject(RejectReason::USER_DECLINED);
+            continue;
+        }
+
+        char input = line[0];
         if (input == 'l') {
             auto devices = net.getDevices();
             for (auto& d : devices) {
