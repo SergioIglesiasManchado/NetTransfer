@@ -23,6 +23,7 @@ Flow:
 ```
 
 ---
+
 ## IMPORTANT
 
 Windows Defender Firewall → Inbound Rules → New Rule
@@ -30,10 +31,10 @@ Windows Defender Firewall → Inbound Rules → New Rule
 
 ## TODO list
 
-specify the firewall rules needed for both windows and linux
-check the firewall config before executing actual service
+specify the firewall rules needed for both windows and linux (integrated on windows, explain for linux in readme)
 add resumable transfers (already defined, need to implement payload and sending)
 add the tls actual handshake verification in block 5
+add the ssl keys creation
 
 for compiling on windows:
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
