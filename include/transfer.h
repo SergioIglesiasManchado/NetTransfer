@@ -80,7 +80,7 @@ public:
   void setOnOffer(std::function<void(OfferPayload)> callback);
   void accept(uint64_t resume_offset);
   void reject(RejectReason reason);
-  uint16_t TransferReceiver::getPort();
+  uint16_t getPort();
 
   bool start();
   bool stop();
