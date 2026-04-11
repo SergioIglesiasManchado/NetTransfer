@@ -34,7 +34,7 @@ Windows Defender Firewall → Inbound Rules → New Rule
 specify the firewall rules needed for both windows and linux (integrated on windows, explain for linux in readme)
 add resumable transfers (already defined, need to implement payload and sending)
 add the tls actual handshake verification in block 5
-add the ssl keys creation
+IMPORTANT: add the ssl keys creation, remember block 5
 
 for compiling on windows:
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
@@ -86,8 +86,8 @@ check in linux if it compiles or not
   - [✅] `if(WIN32)` → link `ws2_32`, `mswsock`
   - [✅] `if(UNIX)` → link `pthread`
   - [✅] `if(WIN32)` → link OpenSSL pre-built binaries; `if(UNIX)` → find system OpenSSL
-- [ ] Verify `asio::io_context` spins up and shuts down cleanly on both platforms
-- [ ] Write a trivial TCP echo server/client as a compile smoke test → delete after passing
+- [✅] Verify `asio::io_context` spins up and shuts down cleanly on both platforms
+- [✅] Write a trivial TCP echo server/client as a compile smoke test → delete after passing
 
 **Key types to use (never raw descriptors):**
 - `asio::ip::tcp::socket`
@@ -224,7 +224,7 @@ DONE (→ IDLE) ERROR (→ IDLE, notify user)
 ### Block 5 — Security
 > Goal: Nobody on your Wi-Fi can snoop transfers, spoof devices, or send you malware disguised as a cat photo.
 
-- [ ] **TLS channel (mandatory, not optional):**
+- [✅] **TLS channel (mandatory, not optional):**
   - Use `asio::ssl::context` with `TLSv1.2_or_above`
   - Generate a self-signed certificate + Ed25519 key pair on first launch
   - Store private key in OS keychain (Windows Credential Manager / Linux Secret Service / fallback to `~/.config/landrop/`)
@@ -233,11 +233,11 @@ DONE (→ IDLE) ERROR (→ IDLE, notify user)
   - First connection to a new device shows its certificate fingerprint to both users ("Do these match? YES / NO")
   - Store approved fingerprints in a local `trusted_devices.json`
   - Reject connections from unknown fingerprints unless the user explicitly allows them
-- [ ] **File validation:**
+- [✅] **File validation:**
   - Strip the full path from the filename on the sender side before sending
   - Reject filenames containing `..`, `/`, `\`, or null bytes
   - Reject attempts to write outside the Downloads directory (resolve the full path and assert it starts with the Downloads prefix)
-- [ ] **SHA-256 integrity check:** computed on sender before transfer begins, verified on receiver after the last byte lands on disk (see Block 4 above)
+- [✅] **SHA-256 integrity check:** computed on sender before transfer begins, verified on receiver after the last byte lands on disk (see Block 4 above)
 - [ ] **No auto-execution:** receiver saves to Downloads only — never opens or runs the file
 
 ---
@@ -337,16 +337,3 @@ cd build && ctest --output-on-failure
 **Linux:** `sudo apt install libssl-dev` or equivalent.
 
 ---
-
-## Current Status
-
-| Block                                 | Status         |
-| ------------------------------------- | -------------- |
-| Block 0 — Tooling & Project Structure | ⬜ Not started |
-| Block 1 — Cross-Platform Foundation   | ⬜ Not started |
-| Block 2 — Protocol Definition         | ⬜ Not started |
-| Block 3 — State Machine               | ⬜ Not started |
-| Block 4 — Network Core                | ⬜ Not started |
-| Block 5 — Security                    | ⬜ Not started |
-| Block 6 — GUI                         | ⬜ Not started |
-| Block 7 — Testing                     | ⬜ Not started |

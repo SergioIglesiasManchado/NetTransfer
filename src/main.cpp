@@ -16,14 +16,28 @@ bool firewallRuleExists(const std::string &name) {
 
 void addFirewallRules() {
   if (!firewallRuleExists("NetTransfer UDP")) {
-    system("netsh advfirewall firewall add rule name=\"NetTransfer UDP\" "
+    int result = system("netsh advfirewall firewall add rule name=\"NetTransfer UDP\" "
            "protocol=UDP dir=in localport=50000 action=allow >nul 2>&1");
-    std::cout << "Added firewall rule: NetTransfer UDP\n";
+    if (result != 0) {
+      std::cout << "WARNING: Could not add firewall rules.\n";
+      std::cout << "Please run NetTransfer as Administrator for full functionality.\n";
+      std::cout << "Without firewall rules, other devices may not be able to find this PC.\n";
+      return;
+    } else {
+      std::cout << "Added firewall rule: NetTransfer UDP\n";
+    }
   }
   if (!firewallRuleExists("NetTransfer TCP")) {
-    system("netsh advfirewall firewall add rule name=\"NetTransfer TCP\" "
+    int result = system("netsh advfirewall firewall add rule name=\"NetTransfer TCP\" "
            "protocol=TCP dir=in localport=50001-50100 action=allow >nul 2>&1");
-    std::cout << "Added firewall rule: NetTransfer TCP\n";
+    if (result != 0) {
+      std::cout << "WARNING: Could not add firewall rules.\n";
+      std::cout << "Please run NetTransfer as Administrator for full functionality.\n";
+      std::cout << "Without firewall rules, other devices may not be able to find this PC.\n";
+      return;
+    } else {
+      std::cout << "Added firewall rule: NetTransfer TCP\n";
+    }
   }
 }
 #endif
