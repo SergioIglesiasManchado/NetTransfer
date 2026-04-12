@@ -186,6 +186,16 @@ std::vector<uint8_t> serializeOffer(const OfferPayload &p) {
     buffer.push_back(p.file_name[i]);
   }
 
+  // push back the device_name length
+  for (int i = 0; i < 2; i++) {
+    buffer.push_back((p.device_name.length() >> (8 - 8 * i)) & 0xFF);
+  }
+
+  // push back the device_name itself
+  for (int i = 0; i < p.device_name.length(); i++) {
+    buffer.push_back(p.device_name[i]);
+  }
+
   return buffer;
 }
 
@@ -240,10 +250,31 @@ bool deserializeOffer(const uint8_t *data, size_t len, OfferPayload &out) {
     file_name.push_back(temp);
   }
 
+  // extract the device_name length
+  uint16_t device_name_length = 0;
+  for (int i = 0; i < 2; i++) {
+    uint16_t temp = static_cast<uint16_t>(data[counter++]);
+    temp <<= (8 - 8 * i);
+    device_name_length = device_name_length | temp;
+  }
+
+  // check for out of bounds
+  if (counter + device_name_length > len) {
+    return false;
+  }
+
+  // extract the file_name
+  std::string device_name;
+  for (int i = 0; i < device_name_length; i++) {
+    uint8_t temp = data[counter++];
+    device_name.push_back(temp);
+  }
+
   out.file_size = file_size;
   out.resume_offset = resume_offset;
   memcpy(out.sha256, sha256, 32);
   out.file_name = file_name;
+  out.device_name = device_name;
 
   return true;
 }

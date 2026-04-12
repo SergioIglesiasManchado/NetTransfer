@@ -49,18 +49,7 @@ int main(int argc, char *argv[]) {
   addFirewallRules();
 #endif
 
-  std::cout << "OpenSSL version: " << OpenSSL_version(OPENSSL_VERSION) << "\n";
-
-  std::string device_name;
-  uint16_t tcp_port;
-
-  std::cout << "introduce device name: ";
-  std::cin >> device_name;
-
-  std::cout << "introduce tcp port (50001-50100): ";
-  std::cin >> tcp_port;
-
-  NetTransfer net(device_name, tcp_port);
+  NetTransfer net;
 
   // callbacks
   net.setOnDeviceFound([](DiscoveredDevice d) {
@@ -98,6 +87,21 @@ int main(int argc, char *argv[]) {
     }
     std::cout << "\n" << (ok ? "transfer complete\n" : "transfer failed\n");
   });
+
+  net.setOnFirstRun([]() {
+    std::string name;
+    std::cout << "First run, Enter device name: ";
+    std::getline(std::cin, name);
+    return name;
+  });
+
+ net.setOnNewDevice([](std::string fingerprint, std::string name) {
+    std::cout << "\nNew device tried to connect, but was rejected because it is untrusted:\n";
+    std::cout << "  Name:        " << name << "\n";
+    std::cout << "  Fingerprint: " << fingerprint << "\n";
+    std::cout << "Type 't' to trust them (they will need to send the file again), or 'i' to ignore.\n";
+    return true;
+});
 
   bool fine = net.start();
   if (!fine) {
@@ -153,6 +157,12 @@ int main(int argc, char *argv[]) {
     } else if (input == 'n' && pending_offer_flag) {
         pending_offer_flag = false;
         net.reject(RejectReason::USER_DECLINED);
+    } else if (input == 't' && net.hasPendingTrust()) {
+        net.trustDevice();
+        std::cout << "Device trusted. They can now send you files.\n";
+    } else if (input == 'i' && net.hasPendingTrust()) {
+        net.ignorePendingTrust();
+        std::cout << "Device ignored.\n";
     }
   }
 

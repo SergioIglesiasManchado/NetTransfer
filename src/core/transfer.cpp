@@ -15,9 +15,9 @@ std::filesystem::path resolveFilePath(const std::filesystem::path &dir,
 TransferSender::TransferSender(asio::io_context &io,
                                asio::ssl::context &ssl_ctx,
                                std::string target_ip, uint16_t target_port,
-                               std::string file_path)
+                               std::string file_path, std::string device_name)
     : io_context(io), socket(io, ssl_ctx), target_ip(target_ip),
-      target_port(target_port), file_path(file_path) {
+      target_port(target_port), file_path(file_path), device_name(device_name) {
 
   bytes_sent = 0;
 
@@ -69,11 +69,9 @@ bool TransferSender::start() {
     std::cout << "connecting to " << target_ip << ":" << target_port << "\n";
     socket.lowest_layer().connect(endpoint);
     std::cout << "connected, starting handshake\n";
-    // TODO no security for now
-    SSL_set_verify(socket.native_handle(), SSL_VERIFY_NONE, nullptr);
-    socket.set_verify_mode(asio::ssl::verify_none);
+
     socket.handshake(asio::ssl::stream_base::client);
-    if (onValidateCert && !onValidateCert(socket.native_handle())) {
+    if (onValidateCert && !onValidateCert(socket.native_handle(), device_name)) {
         std::cerr << "peer cert validation failed\n";
         return false;
     }
@@ -102,6 +100,7 @@ bool TransferSender::start() {
   payload.resume_offset = 0;
   memcpy(payload.sha256, sha256, 32);
   payload.file_name = std::filesystem::path(file_path).filename().string();
+  payload.device_name = device_name;
 
   std::vector<uint8_t> serializedPayload = serializeOffer(payload);
   header.payload_len = static_cast<uint32_t>(serializedPayload.size());
@@ -186,7 +185,7 @@ void TransferSender::setOnComplete(std::function<void(bool)> callback) {
   onComplete = callback;
 }
 
-void TransferSender::setOnValidateCert(std::function<bool(SSL*)> callback) {
+void TransferSender::setOnValidateCert(std::function<bool(SSL*, std::string)> callback) {
     onValidateCert = callback;
 }
 
@@ -336,9 +335,6 @@ void TransferReceiver::listenForConnections() {
       return;
     }
 
-    // TODO setting ssl verifing to none
-    SSL_set_verify(socket->native_handle(), SSL_VERIFY_NONE, nullptr);
-    socket->set_verify_mode(asio::ssl::verify_none);
     socket->async_handshake(
     asio::ssl::stream_base::server, [this](std::error_code ec) {
 
@@ -351,14 +347,6 @@ void TransferReceiver::listenForConnections() {
           ERR_error_string_n(err, buf, sizeof(buf));
           std::cerr << "OpenSSL detail: " << buf << "\n";
         }
-        return;
-      }
-
-      // validate cert
-      if (onValidateCert && !onValidateCert(socket->native_handle())) {
-        std::cerr << "peer cert validation failed, rejecting connection\n";
-        socket->lowest_layer().close();
-        listenForConnections();
         return;
       }
 
@@ -405,6 +393,13 @@ void TransferReceiver::listenForConnections() {
                             op);
           pending_offer = op;
           file_size = pending_offer.file_size;
+
+          // validation
+          if (onValidateCert && !onValidateCert(socket->native_handle(), op.device_name)) {
+              socket->lowest_layer().close();
+              listenForConnections();
+              return;
+          }
           onOffer(op);
         });
       });
@@ -603,7 +598,7 @@ void TransferReceiver::setOnOffer(std::function<void(OfferPayload)> callback) {
   onOffer = callback;
 }
 
-void TransferReceiver::setOnValidateCert(std::function<bool(SSL*)> callback) {
+void TransferReceiver::setOnValidateCert(std::function<bool(SSL*, std::string)> callback) {
     onValidateCert = callback;
 }
 

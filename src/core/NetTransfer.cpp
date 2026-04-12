@@ -1,28 +1,42 @@
 
 #include "NetTransfer.h"
 
-NetTransfer::NetTransfer(std::string device_name, uint16_t tcp_port)
+NetTransfer::NetTransfer()
     : ssl_ctx(asio::ssl::context::tls),
-      client_ctx(asio::ssl::context::tls), // copilot changed, before one ssl, now ssl (server) and client
-      discovery(io, device_name, tcp_port),       // to undo, delete here, in .h, in start() and in sendFile()
-      receiver(io, ssl_ctx, tcp_port),
-      device_name(device_name),
-      tcp_port(tcp_port) {
+      client_ctx(asio::ssl::context::tls) {
+    config_directory_path = "";  // TODO change to specific path
 }
 
 bool NetTransfer::start() {
 
+    // load config
+    bool loaded = loadConfig();
+    if (!loaded) {
+        // first run — ask user for name via callback
+        if (onFirstRun) {
+            config.device_name = onFirstRun();
+        } else {
+            config.device_name = "NetTransfer";  // fallback default
+        }
+        config.tcp_port = TCP_PORT_MIN; // autopicks port
+    }
+
+    // initialize discovery and receiver after getting tcp port from config
+    discovery = std::make_unique<DiscoveryService>(io, config.device_name, config.tcp_port);
+    receiver = std::make_unique<TransferReceiver>(io, ssl_ctx, config.tcp_port);
+
     // check if keys exist
     // TODO change trusted_file path in future
-    ensureCertExists("");
+    ensureCertExists();
 
-    // load ssl keys
-    ssl_ctx.set_verify_mode(asio::ssl::verify_none);
-    client_ctx.set_verify_mode(asio::ssl::verify_none);
     try {
-        ssl_ctx.use_certificate_file("cert.pem", asio::ssl::context::pem);
-        ssl_ctx.use_private_key_file("key.pem", asio::ssl::context::pem);
-       
+        ssl_ctx.use_certificate_file(config_directory_path + "cert.pem", asio::ssl::context::pem);
+        ssl_ctx.use_private_key_file(config_directory_path + "key.pem", asio::ssl::context::pem);
+        client_ctx.use_certificate_file(config_directory_path + "cert.pem", asio::ssl::context::pem);
+        client_ctx.use_private_key_file(config_directory_path + "key.pem", asio::ssl::context::pem);
+        SSL_CTX_set_verify(ssl_ctx.native_handle(), 
+            SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 
+            nullptr);
     } catch (std::exception &e) {
         std::cout << "ssl setup failed: " << e.what() << "\n";
         unsigned long err;
@@ -34,25 +48,44 @@ bool NetTransfer::start() {
         return false;
     }
 
+    /** Dummy callback that lets the handshake finish so we can check the fingerprint
+    auto dummy_verify = [](bool preverify_ok, asio::ssl::verify_context& ctx) {
+        // just tell openssl that we'll be verifying it, not him
+        return true; 
+    };
+    */
+    // for server
+    ssl_ctx.set_verify_mode(asio::ssl::verify_peer | asio::ssl::verify_client_once); 
+    ssl_ctx.set_verify_callback([](bool preverify_ok, asio::ssl::verify_context& ctx) {
+        return true; // Let the handshake finish so we can validate manually
+    });
+
+    // for client
+    client_ctx.set_verify_mode(asio::ssl::verify_peer);
+    client_ctx.set_verify_callback([](bool preverify_ok, asio::ssl::verify_context& ctx) {
+        return true; 
+    });
+
     // callbacks
-    discovery.setOnDeviceFound(onDeviceFound);
-    discovery.setOnDeviceLeft(onDeviceLeft);
-    receiver.setOnOffer(onOffer);
-    receiver.setOnProgress(onProgress);
-    receiver.setOnComplete(onComplete);
+    discovery->setOnDeviceFound(onDeviceFound);
+    discovery->setOnDeviceLeft(onDeviceLeft);
+    receiver->setOnOffer(onOffer);
+    receiver->setOnProgress(onProgress);
+    receiver->setOnComplete(onComplete);
+    receiver->setOnValidateCert([this](SSL* ssl, std::string device_name) {
+        return validatePeerCert(ssl, device_name);
+    });
 
     // start discovery and receiver
-    bool fine = discovery.start();
+    bool fine = discovery->start();
     if (!fine) return false;
-    fine = receiver.start();
+    fine = receiver->start();
     if (!fine) return false;
-    discovery.setTcpPort(receiver.getPort());
+    discovery->setTcpPort(receiver->getPort());
 
-    // load our ssl to the receiver
-    // TODO sending path to trusted file, change in future
-    receiver.setOnValidateCert([this](SSL* ssl) {
-        return validatePeerCert(ssl, "");
-    });
+    // save actual port used and save config
+    config.tcp_port = receiver->getPort();
+    saveConfig();
 
     // launch io thread
     io_thread = std::thread([this]() {
@@ -64,9 +97,9 @@ bool NetTransfer::start() {
 
 bool NetTransfer::stop() {
 
-    bool fine = discovery.stop();
+    bool fine = discovery->stop();
     if (!fine) return false;
-    fine = receiver.stop();
+    fine = receiver->stop();
     if (!fine) return false;
     io.stop();
     io_thread.join();
@@ -79,20 +112,20 @@ bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
     // get device info from discoveryDevice, call callbacks and start sender
     // TODO delete, is DEBUG
     std::cout << "sending file called: " << file_path << "\n";
-    auto sender = std::make_shared<TransferSender>(io, client_ctx, target.ip, target.tcp_port, file_path);
+    active_sender = std::make_shared<TransferSender>(io, client_ctx, target.ip, target.tcp_port, file_path, config.device_name);
     // TODO sending trusted path, fix in the future
-    sender->setOnValidateCert([this](SSL* ssl) {
-        return validatePeerCert(ssl, "");
+    active_sender->setOnValidateCert([this, target](SSL* ssl, std::string device_name) {
+        return validatePeerCert(ssl, target.name);
     });
-    if (onProgress) sender->setOnProgress(onProgress);
-    sender->setOnComplete([this, sender](bool success) {
+    if (onProgress) active_sender->setOnProgress(onProgress);
+    active_sender->setOnComplete([this](bool success) {
         if (onComplete) onComplete(success);
     });
-    bool sent = sender->start();
+    bool sent = active_sender->start();
     return sent;
 }
 
-void NetTransfer::ensureCertExists(std::string config_directory_path) {
+void NetTransfer::ensureCertExists() {
 
     if (std::filesystem::exists(config_directory_path + KEY_FILE) && std::filesystem::exists(config_directory_path + CERT_FILE)) {
         return;
@@ -135,7 +168,7 @@ void NetTransfer::ensureCertExists(std::string config_directory_path) {
     // set subject name
     X509_NAME* name = X509_get_subject_name(cert);
     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-        (unsigned char*)device_name.c_str(), -1, -1, 0);
+        (unsigned char*)config.device_name.c_str(), -1, -1, 0);
 
     // self-signed — issuer = subject
     X509_set_issuer_name(cert, name);
@@ -179,55 +212,85 @@ std::string NetTransfer::getCertFingerprint(SSL* ssl) {
     return fingerprint.str();
 }
 
-bool NetTransfer::validatePeerCert(SSL* ssl, std::string config_directory_path) {
+bool NetTransfer::validatePeerCert(SSL* ssl, std::string device_name) {
 
-    // tries to load trustedDevices.json
+    // tries to load trusted_devices.json
     std::ifstream f(config_directory_path + TRUSTED_FILE);
-
-    // opens json and advances to trust zone
     nlohmann::json trust_store = nlohmann::json::object();
     if (f.is_open()) {
         try {
-        f >> trust_store;
+            f >> trust_store;
         } catch (std::exception& e) {
             std::cerr << "trust store corrupted, starting fresh\n";
             trust_store = nlohmann::json::object();
         }
     }
 
-    // get fingerprit from peer
+    // get fingerprint from peer
     std::string fingerprint = getCertFingerprint(ssl);
-    if (fingerprint.empty()) return true;
+    if (fingerprint.empty()) return true;  // no cert, allow (receiver side)
 
-    // check if fingerint is in json
+    // check if fingerprint is known
     if (trust_store.contains(fingerprint)) {
-        // known device, allow
+        // known device, allow silently
+        return true;
+    }
+
+    // unknown device — queue for user decision, reject for now
+    pending_trust_fingerprint = fingerprint;
+    pending_trust_device_name = device_name;
+    pending_trust_flag = true;
+    if (onNewDevice) onNewDevice(fingerprint, device_name);
+    return false;
+}
+
+bool NetTransfer::loadConfig() {
+
+    std::ifstream f(config_directory_path + CONFIG_FILE);
+    if (f.is_open()) {
+        // load config
+        nlohmann::json conf = nlohmann::json::object();
+        try {
+            f >> conf;
+        } catch (std::exception& e) {
+            std::cerr << "config corrupted, starting fresh\n";
+            return false;
+        }
+        if (!conf.contains("device_name") || !conf.contains("tcp_port")) {
+            std::cerr << "config missing fields, starting fresh\n";
+            return false;
+        }
+        config.device_name = conf["device_name"];
+        config.tcp_port = conf["tcp_port"];
         return true;
     } else {
-        // new device, add and allow (TOFU)
-        trust_store[fingerprint] = true;
-        // save updated trust store
-        std::ofstream out(config_directory_path + TRUSTED_FILE);
-        if (!out.is_open()) {
-            std::cerr << "failed to save trust store\n";
-            return true;  // still allow, just couldn't save
-        }
-        out << trust_store.dump(4);  // pretty print with 4 spaces
-        std::cout << "New device trusted: " << fingerprint << "\n";
-        return true;
+        return false;
     }
 }
 
+bool NetTransfer::saveConfig() {
+
+    std::ofstream f(config_directory_path + CONFIG_FILE);
+    if (!f.is_open()) {
+        return false;
+    }
+    nlohmann::json conf = nlohmann::json::object();
+    conf["device_name"] = config.device_name;
+    conf["tcp_port"] = config.tcp_port;
+    f << conf.dump(4);
+    return true;
+}
+
 std::vector<DiscoveredDevice> NetTransfer::getDevices() {
-    return discovery.getDevices();
+    return discovery->getDevices();
 }
 
 void NetTransfer::accept() { 
-    asio::post(io, [this]() { receiver.accept(0); });
+    asio::post(io, [this]() { receiver->accept(0); });
 }
 
 void NetTransfer::reject(RejectReason reason) { 
-    asio::post(io, [this, reason]() { receiver.reject(reason); });
+    asio::post(io, [this, reason]() { receiver->reject(reason); });
 }
 
 void NetTransfer::setOnDeviceFound(
@@ -251,4 +314,38 @@ void NetTransfer::setOnComplete(std::function<void(bool)> callback) {
 
 void NetTransfer::setOnOffer(std::function<void(OfferPayload)> callback) {
   onOffer = callback;
+}
+
+void NetTransfer::setOnFirstRun(std::function<std::string()> callback) {
+    onFirstRun = callback;
+}
+
+void NetTransfer::setOnNewDevice(std::function<bool(std::string, std::string)> callback) {
+    onNewDevice = callback;
+}
+
+void NetTransfer::trustDevice() {
+    if (!pending_trust_flag) return;
+    
+    std::ifstream f(config_directory_path + TRUSTED_FILE);
+    nlohmann::json trust_store = nlohmann::json::object();
+    if (f.is_open()) {
+        try { f >> trust_store; } catch (...) {}
+    }
+    
+    trust_store[pending_trust_fingerprint] = pending_trust_device_name;
+    
+    std::ofstream out(config_directory_path + TRUSTED_FILE);
+    out << trust_store.dump(4);
+    
+    pending_trust_flag = false;
+    std::cout << "Device " << pending_trust_device_name << " trusted.\n";
+}
+
+bool NetTransfer::hasPendingTrust() {
+    return pending_trust_flag;
+}
+
+void NetTransfer::ignorePendingTrust() {
+    pending_trust_flag = false;
 }

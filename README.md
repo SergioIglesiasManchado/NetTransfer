@@ -33,10 +33,17 @@ Windows Defender Firewall → Inbound Rules → New Rule
 
 specify the firewall rules needed for both windows and linux (integrated on windows, explain for linux in readme)
 add resumable transfers (already defined, need to implement payload and sending)
-add the tls actual handshake verification in block 5
-IMPORTANT: add the ssl keys creation, remember block 5
 refactor code to be sustainable and readable
 configure release build with proper config folder
+
+3. A Recommended "Middle Ground" (state right now = 3 sends needed for the actual send)
+Instead of holding the connection open indefinitely (which is vulnerable to hanging-connection attacks), most modern apps (like LocalSend or AirDrop) use this flow:
+    Handshake: Completes immediately using your dummy_verify.
+    Validation: Your code checks the fingerprint.
+    The "Pending" State: If unknown, the receiver sends a TRANSFER_REJECT with a specific code: ERROR_NEEDS_TRUST.
+    UI Trigger: Device B pops up the "Trust Device A?" window.
+    Auto-Retry: Device A sees the NEEDS_TRUST error and automatically retries the connection every 3 seconds.
+    Success: Once the user clicks "Trust" on B, the next auto-retry from A succeeds instantly.
 
 for compiling on windows:
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
@@ -193,7 +200,7 @@ DONE (→ IDLE) ERROR (→ IDLE, notify user)
 
 #### 4b — TCP Transfer (Sender side)
 - [✅] Open `asio::ssl::stream<tcp::socket>` to the target's IP and TCP port
-- [ ] Complete TLS handshake (verify peer certificate / key fingerprint)
+- [✅] Complete TLS handshake (verify peer certificate / key fingerprint)
 - [✅] Send `TRANSFER_OFFER` — wait for `TRANSFER_ACCEPT` or `TRANSFER_REJECT`
 - [✅] Open file in binary read mode
 - [ ] If `resume_offset > 0` in the ACCEPT, seek to that offset before reading
@@ -231,7 +238,7 @@ DONE (→ IDLE) ERROR (→ IDLE, notify user)
   - Generate a self-signed certificate + Ed25519 key pair on first launch
   - Store private key in OS keychain (Windows Credential Manager / Linux Secret Service / fallback to `~/.config/landrop/`)
   - On connection, verify peer certificate fingerprint matches the known device's registered fingerprint
-- [ ] **Device pairing:**
+- [✅] **Device pairing:**
   - First connection to a new device shows its certificate fingerprint to both users ("Do these match? YES / NO")
   - Store approved fingerprints in a local `trusted_devices.json`
   - Reject connections from unknown fingerprints unless the user explicitly allows them

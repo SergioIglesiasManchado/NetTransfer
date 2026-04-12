@@ -73,7 +73,7 @@ struct OfferPayload {
   uint64_t resume_offset;
   uint8_t sha256[32];
   std::string file_name; // UTF-8, only name, no path
-                         // when serializing, 2b for filename size, then raw
+  std::string device_name;  // when serializing, 2b for filename size, then raw
                          // bytes for the name itself
 };
 
