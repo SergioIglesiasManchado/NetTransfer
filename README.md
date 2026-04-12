@@ -35,6 +35,8 @@ specify the firewall rules needed for both windows and linux (integrated on wind
 add resumable transfers (already defined, need to implement payload and sending)
 add the tls actual handshake verification in block 5
 IMPORTANT: add the ssl keys creation, remember block 5
+refactor code to be sustainable and readable
+configure release build with proper config folder
 
 for compiling on windows:
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static

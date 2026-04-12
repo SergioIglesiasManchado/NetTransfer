@@ -7,6 +7,7 @@
 
 #ifdef _WIN32
 #include <cstdlib>
+#include <openssl/applink.c>
 
 bool firewallRuleExists(const std::string &name) {
   std::string cmd =
@@ -66,15 +67,17 @@ int main(int argc, char *argv[]) {
     std::cout << "device found: " << d.name << " (" << d.ip << ")\n";
   });
 
-  std::atomic<bool> pending_offer{false};
-  std::string offer_file_name;
-  uint64_t offer_file_size;
-  net.setOnOffer([&net, &pending_offer, &offer_file_name,
-                  &offer_file_size](OfferPayload offer) {
-    offer_file_name = offer.file_name;
-    offer_file_size = offer.file_size;
-    pending_offer = true;
+  std::atomic<bool> pending_offer_flag{false};
+  OfferPayload pending_offer_data;
+
+  net.setOnOffer([&](OfferPayload offer) {
+      pending_offer_data = offer;
+      pending_offer_flag = true;
+      std::cout << "\nincoming file: " << offer.file_name 
+                << " (" << offer.file_size << " bytes)\n";
+      std::cout << "type 'y' or 'n' to accept/reject\n";
   });
+
   net.setOnProgress([](uint64_t sent, uint64_t total) {
     static auto last_print = std::chrono::steady_clock::now();
     auto now = std::chrono::steady_clock::now();
@@ -88,7 +91,8 @@ int main(int argc, char *argv[]) {
               << std::setprecision(1) << percent << "%)";
     std::cout.flush();
   });
-  net.setOnComplete([&pending_offer](bool ok) {
+
+  net.setOnComplete([&pending_offer_flag](bool ok) {
     if (ok) {
       std::cout << "\rprogress: 100.0%                      \n";
     }
@@ -102,20 +106,6 @@ int main(int argc, char *argv[]) {
   }
 
   while (true) {
-
-    if (pending_offer) {
-      std::cout << "\nincoming file: " << offer_file_name << " ("
-                << offer_file_size << " bytes)\n";
-      std::cout << "accept? (y/n)";
-      std::string ans;
-      std::getline(std::cin, ans);
-      pending_offer = false;
-      if (ans == "y")
-        net.accept();
-      else
-        net.reject(RejectReason::USER_DECLINED);
-      continue;
-    }
 
     std::cout << "select option: (l) list, (s) send file, (q) quit: \n";
     std::string line;
@@ -141,9 +131,9 @@ int main(int argc, char *argv[]) {
                   << ":" << devices[i].tcp_port << "\n";
       }
       std::cout << "select device: ";
-      int choice;
-      std::cin >> choice;
-      std::cin.ignore(); // clear newline from buffer
+      std::string choice_str;
+      std::getline(std::cin, choice_str);
+      int choice = std::stoi(choice_str);
       if (choice < 0 || choice >= devices.size()) {
         std::cout << "invalid choice\n";
         continue;
@@ -157,6 +147,12 @@ int main(int argc, char *argv[]) {
       std::cout << "bye, see ya\n";
       net.stop();
       break;
+    } else if (input == 'y' && pending_offer_flag) {
+    pending_offer_flag = false;
+    net.accept();
+    } else if (input == 'n' && pending_offer_flag) {
+        pending_offer_flag = false;
+        net.reject(RejectReason::USER_DECLINED);
     }
   }
 

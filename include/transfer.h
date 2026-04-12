@@ -32,6 +32,7 @@ private:
   void sendNextChunk();
   std::function<void(uint64_t, uint64_t)> onProgress;
   std::function<void(bool)> onComplete;
+  std::function<bool(SSL*)> onValidateCert;
 
 public:
   TransferSender(asio::io_context &io, asio::ssl::context &ssl_ctx,
@@ -41,6 +42,7 @@ public:
   void setOnProgress(
       std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
   void setOnComplete(std::function<void(bool success)> callback);
+  void setOnValidateCert(std::function<bool(SSL*)> callback);
 
   bool start();
   bool stop();
@@ -69,6 +71,7 @@ private:
   std::function<void(uint64_t, uint64_t)> onProgress;
   std::function<void(bool)> onComplete;
   std::function<void(OfferPayload)> onOffer;
+  std::function<bool(SSL*)> onValidateCert;
 
 public:
   TransferReceiver(asio::io_context &io, asio::ssl::context &ssl_ctx,
@@ -78,6 +81,7 @@ public:
       std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
   void setOnComplete(std::function<void(bool success)> callback);
   void setOnOffer(std::function<void(OfferPayload)> callback);
+  void setOnValidateCert(std::function<bool(SSL*)> callback);
   void accept(uint64_t resume_offset);
   void reject(RejectReason reason);
   uint16_t getPort();

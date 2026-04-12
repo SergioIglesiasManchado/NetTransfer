@@ -12,31 +12,16 @@ NetTransfer::NetTransfer(std::string device_name, uint16_t tcp_port)
 
 bool NetTransfer::start() {
 
-    // load ssl
+    // check if keys exist
+    // TODO change trusted_file path in future
+    ensureCertExists("");
+
+    // load ssl keys
     ssl_ctx.set_verify_mode(asio::ssl::verify_none);
     client_ctx.set_verify_mode(asio::ssl::verify_none);
     try {
         ssl_ctx.use_certificate_file("cert.pem", asio::ssl::context::pem);
         ssl_ctx.use_private_key_file("key.pem", asio::ssl::context::pem);
-        /**
-        if (!SSL_CTX_check_private_key(ssl_ctx.native_handle())) {
-            std::cerr << "private key does not match certificate\n";
-            return false;
-        }
-        std::cout << "SSL cert loaded OK\n";  // DEBUG
-        client_ctx.use_certificate_file("cert.pem", asio::ssl::context::pem);
-        client_ctx.use_private_key_file("key.pem", asio::ssl::context::pem);
-        std::cout << "SSL client ctx loaded OK\n";  // DEBUG
-        // DEBUG TODO probably delete this
-        SSL_CTX_set_mode(ssl_ctx.native_handle(), SSL_MODE_AUTO_RETRY);
-        SSL_CTX_set_mode(client_ctx.native_handle(), SSL_MODE_AUTO_RETRY);
-        SSL_CTX_set_security_level(ssl_ctx.native_handle(), 0);
-        SSL_CTX_set_security_level(client_ctx.native_handle(), 0);
-        SSL_CTX_set_cipher_list(ssl_ctx.native_handle(), "ALL:@SECLEVEL=0");
-        SSL_CTX_set_cipher_list(client_ctx.native_handle(), "ALL:@SECLEVEL=0");
-        SSL_CTX_set_ciphersuites(ssl_ctx.native_handle(), "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256");
-        SSL_CTX_set_ciphersuites(client_ctx.native_handle(), "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256");
-         */
        
     } catch (std::exception &e) {
         std::cout << "ssl setup failed: " << e.what() << "\n";
@@ -63,6 +48,13 @@ bool NetTransfer::start() {
     if (!fine) return false;
     discovery.setTcpPort(receiver.getPort());
 
+    // load our ssl to the receiver
+    // TODO sending path to trusted file, change in future
+    receiver.setOnValidateCert([this](SSL* ssl) {
+        return validatePeerCert(ssl, "");
+    });
+
+    // launch io thread
     io_thread = std::thread([this]() {
         io.run();
     });
@@ -88,12 +80,142 @@ bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
     // TODO delete, is DEBUG
     std::cout << "sending file called: " << file_path << "\n";
     auto sender = std::make_shared<TransferSender>(io, client_ctx, target.ip, target.tcp_port, file_path);
+    // TODO sending trusted path, fix in the future
+    sender->setOnValidateCert([this](SSL* ssl) {
+        return validatePeerCert(ssl, "");
+    });
     if (onProgress) sender->setOnProgress(onProgress);
     sender->setOnComplete([this, sender](bool success) {
         if (onComplete) onComplete(success);
     });
     bool sent = sender->start();
     return sent;
+}
+
+void NetTransfer::ensureCertExists(std::string config_directory_path) {
+
+    if (std::filesystem::exists(config_directory_path + KEY_FILE) && std::filesystem::exists(config_directory_path + CERT_FILE)) {
+        return;
+    }
+
+    // generate key file
+    EVP_PKEY* pkey = EVP_PKEY_new();
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
+    EVP_PKEY_keygen_init(ctx);
+    EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx, NID_X9_62_prime256v1); // P-256
+    EVP_PKEY_keygen(ctx, &pkey);
+    EVP_PKEY_CTX_free(ctx);
+
+    // write to key.pem
+    // DEBUG TOD delete this
+    std::cout << "writing key to: " << (config_directory_path + KEY_FILE) << "\n";
+    std::cout << "current directory: " << std::filesystem::current_path() << "\n";
+    FILE* f = fopen((config_directory_path + KEY_FILE).c_str(), "wb");
+    if (!f) {
+        std::cerr << "failed to write key.pem\n";
+        EVP_PKEY_free(pkey);
+        return;
+    }
+    PEM_write_PrivateKey(f, pkey, nullptr, nullptr, 0, nullptr, nullptr);
+    fclose(f);
+
+    // generate cert file
+    X509* cert = X509_new();
+
+    // set serial number
+    ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);
+
+    // set validity period (365 days)
+    X509_gmtime_adj(X509_get_notBefore(cert), 0);
+    X509_gmtime_adj(X509_get_notAfter(cert), 31536000L); // 365 days in seconds
+
+    // set public key
+    X509_set_pubkey(cert, pkey);
+
+    // set subject name
+    X509_NAME* name = X509_get_subject_name(cert);
+    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+        (unsigned char*)device_name.c_str(), -1, -1, 0);
+
+    // self-signed — issuer = subject
+    X509_set_issuer_name(cert, name);
+
+    // sign with private key
+    X509_sign(cert, pkey, EVP_sha256());
+
+    // write to cert.pem
+    f = fopen((config_directory_path + CERT_FILE).c_str(), "wb");
+    if (!f) {
+        std::cerr << "failed to write cert.pem\n";
+        X509_free(cert);
+        EVP_PKEY_free(pkey);
+        return;
+    }
+    PEM_write_X509(f, cert);
+    fclose(f);
+
+    // cleanup
+    X509_free(cert);
+    EVP_PKEY_free(pkey);
+}
+
+std::string NetTransfer::getCertFingerprint(SSL* ssl) {
+
+    // get certificate and compute sha256
+    X509* cert = SSL_get1_peer_certificate(ssl);
+    if (!cert) return ""; // peer didn't return certificate
+    unsigned char buffer[32];
+    unsigned int length;
+    int ok = X509_digest(cert, EVP_sha256(), buffer, &length);
+    if (ok == 0) return "";
+
+    // get hex string 
+    std::stringstream fingerprint;
+    for (int i = 0; i < length; i++) {
+        if (i > 0) fingerprint << ":";
+        fingerprint << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i];
+    }
+    X509_free(cert);
+    return fingerprint.str();
+}
+
+bool NetTransfer::validatePeerCert(SSL* ssl, std::string config_directory_path) {
+
+    // tries to load trustedDevices.json
+    std::ifstream f(config_directory_path + TRUSTED_FILE);
+
+    // opens json and advances to trust zone
+    nlohmann::json trust_store = nlohmann::json::object();
+    if (f.is_open()) {
+        try {
+        f >> trust_store;
+        } catch (std::exception& e) {
+            std::cerr << "trust store corrupted, starting fresh\n";
+            trust_store = nlohmann::json::object();
+        }
+    }
+
+    // get fingerprit from peer
+    std::string fingerprint = getCertFingerprint(ssl);
+    if (fingerprint.empty()) return true;
+
+    // check if fingerint is in json
+    if (trust_store.contains(fingerprint)) {
+        // known device, allow
+        return true;
+    } else {
+        // new device, add and allow (TOFU)
+        trust_store[fingerprint] = true;
+        // save updated trust store
+        std::ofstream out(config_directory_path + TRUSTED_FILE);
+        if (!out.is_open()) {
+            std::cerr << "failed to save trust store\n";
+            return true;  // still allow, just couldn't save
+        }
+        out << trust_store.dump(4);  // pretty print with 4 spaces
+        std::cout << "New device trusted: " << fingerprint << "\n";
+        return true;
+    }
 }
 
 std::vector<DiscoveredDevice> NetTransfer::getDevices() {

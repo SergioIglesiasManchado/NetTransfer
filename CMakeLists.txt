@@ -26,6 +26,7 @@ add_executable(uninstall_rules src/uninstall_rules.cpp)
 
 # ── Asio (header-only, standalone) ─────────────────────────────────────────────
 target_include_directories(NetTransfer PRIVATE
+  third_party/nlohmann
   third_party/asio/include
   include
 )
