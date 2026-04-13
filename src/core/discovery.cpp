@@ -34,7 +34,7 @@ bool DiscoveryService::start() {
     asio::socket_base::broadcast option(true);
     udp_socket.set_option(option);
     udp_socket.set_option(asio::ip::udp::socket::reuse_address(true));
-    
+
     // bind to ip
     asio::ip::udp::endpoint endpoint(asio::ip::make_address("0.0.0.0"),
                                      UDP_DISCOVERY_PORT);
@@ -76,10 +76,13 @@ bool DiscoveryService::stop() {
 
 std::vector<DiscoveredDevice> DiscoveryService::getDevices() {
 
+  // get actual time
   std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
+  // if last seen > WAIT_TIME
   for (int i = 0; i < discoveredDevices.size(); i++) {
-    if ((discoveredDevices[i].last_seen + std::chrono::seconds(15)) < now) {
+    if ((discoveredDevices[i].last_seen + std::chrono::seconds(WAIT_TIME)) <
+        now) {
       discoveredDevices.erase(discoveredDevices.begin() + i);
       i--;
     }
@@ -116,6 +119,7 @@ void DiscoveryService::sendBroadcast() {
 
   try {
 
+    // send discovery payload to the net
     BaseHeader base;
     base.magic = NT_MAGIC;
     base.version = NT_VERSION;
@@ -144,33 +148,34 @@ void DiscoveryService::sendBroadcast() {
   }
 }
 
-  void DiscoveryService::listenForPackages() {
+void DiscoveryService::listenForPackages() {
 
-    auto sender = std::make_shared<asio::ip::udp::endpoint>();
+  auto sender = std::make_shared<asio::ip::udp::endpoint>();
 
-    udp_socket.async_receive_from(
-        asio::buffer(buffer_incoming, BUFFER_MAX_SIZE), *sender,
-        [this, sender](std::error_code ec, size_t bytes) {
-          // check for errors in lambda
-          if (ec) {
-            std::cerr << ec.message() << "\n";
-            return;
-          }
-          if (sender->address() == udp_socket.local_endpoint().address()) {
-            listenForPackages();
-            return;
-          }
+  // listen for udp broadcasts from other devices
+  udp_socket.async_receive_from(
+      asio::buffer(buffer_incoming, BUFFER_MAX_SIZE), *sender,
+      [this, sender](std::error_code ec, size_t bytes) {
+        // check for errors in lambda
+        if (ec) {
+          std::cerr << ec.message() << "\n";
+          return;
+        }
+        if (sender->address() == udp_socket.local_endpoint().address()) {
+          listenForPackages();
+          return;
+        }
 
-          // first, read header, identify type of packet (either broadcast or
-          // response to our broadcast)
-          BaseHeader base;
-          if (!deserializeHeader(buffer_incoming, base)) {
-            // error, throw exception
-            std::cerr << "failed to deserialize header\n";
-            listenForPackages();
-            return;
-          }
-          switch (base.msg_type) {
+        // first, read header, identify type of packet (either broadcast or
+        // response to our broadcast)
+        BaseHeader base;
+        if (!deserializeHeader(buffer_incoming, base)) {
+          // error, throw exception
+          std::cerr << "failed to deserialize header\n";
+          listenForPackages();
+          return;
+        }
+        switch (base.msg_type) {
         case MessageType::DISCOVERY_BROADCAST: {
           DiscoveryPayload dp;
           if (!deserializeDiscovery(buffer_incoming + HEADER_SIZE,
@@ -181,8 +186,8 @@ void DiscoveryService::sendBroadcast() {
           }
           // check if it's mysef
           if (dp.device_name == device_name) {
-              listenForPackages();
-              return;
+            listenForPackages();
+            return;
           }
           // if device in list, update last_seen, if not, add to list
           bool deviceInList = false;
@@ -236,8 +241,8 @@ void DiscoveryService::sendBroadcast() {
           }
           // check for myself
           if (dp.device_name == device_name) {
-              listenForPackages();
-              return;
+            listenForPackages();
+            return;
           }
           bool deviceInList = false;
           for (int i = 0; i < discoveredDevices.size(); i++) {
@@ -259,7 +264,7 @@ void DiscoveryService::sendBroadcast() {
           break;
         }
         default:
-          // unexpected, throw error
+          // unexpected, log and keep on listening
           std::cerr << "unexpected payload\n";
           listenForPackages();
           return;
@@ -269,6 +274,4 @@ void DiscoveryService::sendBroadcast() {
       });
 }
 
-void DiscoveryService::setTcpPort(uint16_t port) {
-  this->tcp_port = port;
-}
+void DiscoveryService::setTcpPort(uint16_t port) { this->tcp_port = port; }

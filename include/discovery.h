@@ -9,6 +9,7 @@
 // time between searchs in seconds
 #define SEARCH_LOOP 5
 #define BUFFER_MAX_SIZE 512 // size in bytes
+#define WAIT_TIME 15 // seconds to clean known device if he has exited the net.
 
 struct DiscoveredDevice {
   std::string name;
