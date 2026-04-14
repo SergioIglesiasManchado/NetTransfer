@@ -122,7 +122,7 @@ bool NetTransfer::stop() {
     fine = receiver->stop();
     if (!fine) return false;
     if (active_sender) {
-        active_sendeer->stop();
+        active_sender->stop();
     }
     io.stop();
     io_thread.join();
@@ -310,6 +310,7 @@ bool NetTransfer::saveConfig() {
 
 std::string NetTransfer::getConfigPath() {
 
+    std::filesystem::path config_path;
     #ifdef _WIN32
         // get for windows
         PWSTR path = nullptr;
@@ -325,9 +326,8 @@ std::string NetTransfer::getConfigPath() {
             config_path = std::filesystem::path(getenv("HOME")) / ".config" / "NetTransfer";
     #endif
 
-    std::filesystem::create_directories(config_directory_path); // create if don't exist
-    config_path = (config_path / "").string();
-    return config_path;
+    std::filesystem::create_directories(config_path); // create if don't exist
+    return (config_path / "").string();
 }
 
 std::vector<DiscoveredDevice> NetTransfer::getDevices() {

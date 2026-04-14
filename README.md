@@ -34,6 +34,7 @@ Windows Defender Firewall → Inbound Rules → New Rule
 specify the firewall rules needed for both windows and linux (integrated on windows, explain for linux in readme)
 add resumable transfers (already defined, need to implement payload and sending)
 refactor code to be sustainable and readable
+delete all couts to console
 
 
 3. A Recommended "Middle Ground" (state right now = 3 sends needed for the actual send)
