@@ -83,7 +83,9 @@ std::vector<DiscoveredDevice> DiscoveryService::getDevices() {
   for (int i = 0; i < discoveredDevices.size(); i++) {
     if ((discoveredDevices[i].last_seen + std::chrono::seconds(WAIT_TIME)) <
         now) {
+      DiscoveredDevice dd = discoveredDevices[i];
       discoveredDevices.erase(discoveredDevices.begin() + i);
+      onDeviceLeft(dd); // trigger ondeviceleft to warn higher lvl
       i--;
     }
   }

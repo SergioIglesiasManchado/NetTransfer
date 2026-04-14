@@ -139,21 +139,21 @@ bool TransferSender::start() {
           }
         } else if (header.msg_type == MessageType::TRANSFER_REJECT) {
           asio::async_read(socket, asio::buffer(buffer, header.payload_len),
-                           [this, header](std::error_code ec, size_t bytes) {
-                             if (ec) {
-                               std::cerr << ec.message() << "\n";
-                               onComplete(false);
-                               return false;
-                             }
-                             RejectPayload rp;
-                             deserializeReject(buffer, header.payload_len,
-                                               rp); // we have reason for reject
-                             std::cerr << "transfer rejected: "
-                                       << static_cast<int>(rp.reason)
-                                       << "\n"; // for now logged
-                             onComplete(false);
-                             return false;
-                           });
+          [this, header](std::error_code ec, size_t bytes) {
+            if (ec) {
+              std::cerr << ec.message() << "\n";
+              onComplete(false);
+              return false;
+            }
+            RejectPayload rp;
+            deserializeReject(buffer, header.payload_len,
+                              rp); // we have reason for reject
+            std::cerr << "transfer rejected: "
+                      << static_cast<int>(rp.reason)
+                      << "\n"; // for now logged
+            onComplete(false);
+            return false;
+          });
         } else {
           std::cerr << "unexpected header type\n";
           return false;
@@ -213,16 +213,16 @@ void TransferSender::sendNextChunk() {
     message->insert(message->end(), buffer, buffer + bytes_read);
 
     asio::async_write(socket, asio::buffer(*message),
-                      [this, message](std::error_code ec, size_t bytes) {
-                        if (ec) {
-                          std::cerr << ec.message() << "\n";
-                          onComplete(false);
-                          return;
-                        }
-                        bytes_sent += bytes - HEADER_SIZE;
-                        onProgress(bytes_sent, file_size);
-                        sendNextChunk();
-                      });
+    [this, message](std::error_code ec, size_t bytes) {
+      if (ec) {
+        std::cerr << ec.message() << "\n";
+        onComplete(false);
+        return;
+      }
+      bytes_sent += bytes - HEADER_SIZE;
+      onProgress(bytes_sent, file_size);
+      sendNextChunk();
+    });
 
   } else {
     // finished transfer, sending done
@@ -243,40 +243,40 @@ void TransferSender::sendNextChunk() {
 
     // waiting for ack
     asio::async_read(socket, asio::buffer(buffer, HEADER_SIZE),
-                     [this](std::error_code ec, size_t bytes) {
-                       if (ec) {
-                         std::cerr << ec.message() << "\n";
-                         onComplete(false);
-                         return;
-                       }
-                       // got ack? check
-                       BaseHeader header;
-                       deserializeHeader(buffer, header);
-                       if (header.msg_type == MessageType::TRANSFER_ACK) {
+    [this](std::error_code ec, size_t bytes) {
+      if (ec) {
+        std::cerr << ec.message() << "\n";
+        onComplete(false);
+        return;
+      }
+      // got ack? check
+      BaseHeader header;
+      deserializeHeader(buffer, header);
+      if (header.msg_type == MessageType::TRANSFER_ACK) {
 
-                         // if ack, all seems nice
-                         asio::async_read(
-                             socket, asio::buffer(buffer, header.payload_len),
-                             [this, header](std::error_code ec, size_t bytes) {
-                               if (ec) {
-                                 std::cerr << ec.message() << "\n";
-                                 onComplete(false);
-                                 return;
-                               }
-                               AckPayload ap;
-                               deserializeAck(buffer, header.payload_len, ap);
-                               if (ap.checksum_ok) {
-                                 onComplete(true);
-                               } else {
-                                 std::cerr << "checksum invalid\n";
-                               }
-                             });
-                       } else {
+        // if ack, all seems nice
+        asio::async_read(
+        socket, asio::buffer(buffer, header.payload_len),
+        [this, header](std::error_code ec, size_t bytes) {
+          if (ec) {
+            std::cerr << ec.message() << "\n";
+            onComplete(false);
+            return;
+          }
+          AckPayload ap;
+          deserializeAck(buffer, header.payload_len, ap);
+          if (ap.checksum_ok) {
+            onComplete(true);
+          } else {
+            std::cerr << "checksum invalid\n";
+          }
+        });
+      } else {
 
-                         // no ack? something went wrong, couldn't transfer
-                         std::cerr << "Expected ackwnoledge, received other\n";
-                       }
-                     });
+        // no ack? something went wrong, couldn't transfer
+        std::cerr << "Expected ackwnoledge, received other\n";
+      }
+    });
   }
 }
 
@@ -438,25 +438,25 @@ void TransferReceiver::accept(uint64_t resume_offset) {
   auto message =
       std::make_shared<std::vector<uint8_t>>(serializeHeader(header));
   asio::async_write(*socket, asio::buffer(*message),
-                    [this, message](std::error_code ec, size_t bytes) {
-                      // DEBUG TODO delete this
-                      std::cout << "accept sent\n";
-                      if (ec) {
-                        std::cerr << "accept write error: " << ec.message()
-                                  << "\n";
-                        return;
-                      }
-                      std::filesystem::path downloads = getDownloadsFolder();
-                      std::filesystem::path filepath =
-                          resolveFilePath(downloads, pending_offer.file_name);
-                      file_path = filepath.string();
-                      file.open(filepath, std::ios::binary | std::ios::out);
-                      if (!file.is_open()) {
-                        std::cerr << "file couldn't be created\n";
-                        return;
-                      }
-                      receiveNextChunk();
-                    });
+  [this, message](std::error_code ec, size_t bytes) {
+    // DEBUG TODO delete this
+    std::cout << "accept sent\n";
+    if (ec) {
+      std::cerr << "accept write error: " << ec.message()
+                << "\n";
+      return;
+    }
+    std::filesystem::path downloads = getDownloadsFolder();
+    std::filesystem::path filepath =
+        resolveFilePath(downloads, pending_offer.file_name);
+    file_path = filepath.string();
+    file.open(filepath, std::ios::binary | std::ios::out);
+    if (!file.is_open()) {
+      std::cerr << "file couldn't be created\n";
+      return;
+    }
+    receiveNextChunk();
+  });
 }
 
 void TransferReceiver::reject(RejectReason reason) {
@@ -479,16 +479,16 @@ void TransferReceiver::reject(RejectReason reason) {
   message->insert(message->end(), payload.begin(), payload.end());
 
   asio::async_write(*socket, asio::buffer(*message),
-                    [this, message](std::error_code ec, size_t bytes) {
-                      if (ec) {
-                        std::cerr << "accept write error: " << ec.message()
-                                  << "\n";
-                        return;
-                      }
-                      socket->shutdown();
-                      socket->lowest_layer().close();
-                      listenForConnections(); // resume listening
-                    });
+  [this, message](std::error_code ec, size_t bytes) {
+    if (ec) {
+      std::cerr << "accept write error: " << ec.message()
+                << "\n";
+      return;
+    }
+    socket->shutdown();
+    socket->lowest_layer().close();
+    listenForConnections(); // resume listening
+  });
 }
 
 void TransferReceiver::receiveNextChunk() {
@@ -510,18 +510,18 @@ void TransferReceiver::receiveNextChunk() {
           // keep on receiving
           uint32_t to_read = header.payload_len;
           asio::async_read(*socket, asio::buffer(buffer + HEADER_SIZE, to_read),
-                           [this](std::error_code ec, size_t bytes) {
-                             if (ec) {
-                               std::cerr << ec.message() << "\n";
-                               return;
-                             }
-                             file.write(
-                                 reinterpret_cast<char *>(buffer + HEADER_SIZE),
-                                 bytes);
-                             bytes_sent += bytes;
-                             onProgress(bytes_sent, file_size);
-                             receiveNextChunk();
-                           });
+          [this](std::error_code ec, size_t bytes) {
+            if (ec) {
+              std::cerr << ec.message() << "\n";
+              return;
+            }
+            file.write(
+                reinterpret_cast<char *>(buffer + HEADER_SIZE),
+                bytes);
+            bytes_sent += bytes;
+            onProgress(bytes_sent, file_size);
+            receiveNextChunk();
+          });
         } else if (header.msg_type == MessageType::TRANSFER_DONE) {
 
           // nice, finished, close file and exit

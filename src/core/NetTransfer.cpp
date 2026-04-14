@@ -3,8 +3,9 @@
 
 NetTransfer::NetTransfer()
     : ssl_ctx(asio::ssl::context::tls),
-      client_ctx(asio::ssl::context::tls) {
-    config_directory_path = "";  // TODO change to specific path
+      client_ctx(asio::ssl::context::tls),
+      strand(asio::make_strand(io)) {
+    config_directory_path = getConfigPath(); 
 }
 
 bool NetTransfer::start() {
@@ -67,15 +68,34 @@ bool NetTransfer::start() {
     });
 
     // callbacks
-    discovery->setOnDeviceFound(onDeviceFound);
-    discovery->setOnDeviceLeft(onDeviceLeft);
-    receiver->setOnOffer(onOffer);
-    receiver->setOnProgress(onProgress);
-    receiver->setOnComplete(onComplete);
+    discovery->setOnDeviceFound([this](DiscoveredDevice d) {
+        asio::post(strand, [this, d]() {
+            if (onDeviceFound) onDeviceFound(d);
+        });
+    });
+    discovery->setOnDeviceLeft([this](DiscoveredDevice d) {
+        asio::post(strand, [this, d]() {
+            if (onDeviceLeft) onDeviceLeft(d);
+        });
+    });
+    receiver->setOnOffer([this](OfferPayload op) {
+        asio::post(strand, [this, op]() {
+            if (onOffer) onOffer(op);
+        });
+    });
+    receiver->setOnProgress([this](uint64_t bytes_sent, uint64_t total) {
+        asio::post(strand, [this, bytes_sent, total]() {
+            if (onProgress) onProgress(bytes_sent, total);
+        });
+    });
+    receiver->setOnComplete([this](bool success) {
+        asio::post(strand, [this, success]() {
+            if (onComplete) onComplete(success);
+        });
+    });
     receiver->setOnValidateCert([this](SSL* ssl, std::string device_name) {
         return validatePeerCert(ssl, device_name);
     });
-
     // start discovery and receiver
     bool fine = discovery->start();
     if (!fine) return false;
@@ -101,6 +121,9 @@ bool NetTransfer::stop() {
     if (!fine) return false;
     fine = receiver->stop();
     if (!fine) return false;
+    if (active_sender) {
+        active_sendeer->stop();
+    }
     io.stop();
     io_thread.join();
 
@@ -228,17 +251,21 @@ bool NetTransfer::validatePeerCert(SSL* ssl, std::string device_name) {
 
     // get fingerprint from peer
     std::string fingerprint = getCertFingerprint(ssl);
-    if (fingerprint.empty()) return true;  // no cert, allow (receiver side)
+    if (fingerprint.empty()) return false;  // no cert, no deal
 
     // check if fingerprint is known
     if (trust_store.contains(fingerprint)) {
-        // known device, allow silently
+        // known device  allow
         return true;
     }
 
-    // unknown device — queue for user decision, reject for now
-    pending_trust_fingerprint = fingerprint;
-    pending_trust_device_name = device_name;
+    // unknown device — queue for user decision, reject 
+    // TODO if user sending, if validate device autosend again
+    {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        pending_trust_fingerprint = fingerprint;
+        pending_trust_device_name = device_name;
+    }
     pending_trust_flag = true;
     if (onNewDevice) onNewDevice(fingerprint, device_name);
     return false;
@@ -281,16 +308,39 @@ bool NetTransfer::saveConfig() {
     return true;
 }
 
+std::string NetTransfer::getConfigPath() {
+
+    #ifdef _WIN32
+        // get for windows
+        PWSTR path = nullptr;
+        SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path);
+        config_path = std::filesystem::path(path) / "NetTransfer";
+        CoTaskMemFree(path);
+    #else
+        // get for linux
+        const char* xdg = getenv("XDG_CONFIG_HOME");
+        if (xdg)
+            config_path = std::filesystem::path(xdg) / "NetTransfer";
+        else
+            config_path = std::filesystem::path(getenv("HOME")) / ".config" / "NetTransfer";
+    #endif
+
+    std::filesystem::create_directories(config_directory_path); // create if don't exist
+    config_path = (config_path / "").string();
+    return config_path;
+}
+
 std::vector<DiscoveredDevice> NetTransfer::getDevices() {
+    std::lock_guard<std::mutex> lock(state_mutex);
     return discovery->getDevices();
 }
 
 void NetTransfer::accept() { 
-    asio::post(io, [this]() { receiver->accept(0); });
+    asio::post(strand, [this]() { receiver->accept(0); });
 }
 
 void NetTransfer::reject(RejectReason reason) { 
-    asio::post(io, [this, reason]() { receiver->reject(reason); });
+    asio::post(strand, [this, reason]() { receiver->reject(reason); });
 }
 
 void NetTransfer::setOnDeviceFound(
@@ -348,4 +398,16 @@ bool NetTransfer::hasPendingTrust() {
 
 void NetTransfer::ignorePendingTrust() {
     pending_trust_flag = false;
+}
+
+void NetTransfer::setDeviceName(std::string new_device_name) {  
+
+    // change name
+    config.device_name = new_device_name;
+
+    // update config file
+    bool check;
+    if (!(check = saveConfig())) {
+        std::cerr << "setDeviceName: couldn't update config\n";
+    }
 }
