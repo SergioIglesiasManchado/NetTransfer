@@ -153,6 +153,18 @@ bool deserializeHeader(const uint8_t *data, BaseHeader &out) {
   return true;
 }
 
+void buildHeader(MessageType msg_type, uint64_t session_id, uint32_t payload_len, BaseHeader &out) {
+
+  out.magic = NT_MAGIC;
+  out.version = NT_VERSION;
+  out.msg_type = msg_type;
+  out.session_id = session_id;
+  out.payload_len = payload_len;
+  out.header_crc = 0;
+  
+  return;
+}
+
 /**
  * Function that takes a reference to an OfferPayload and serializes it
  * @return a vector of uint8_t with the payload serialized

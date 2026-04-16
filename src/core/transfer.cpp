@@ -66,9 +66,9 @@ bool TransferSender::start() {
 
   // TODO remove couts, just for DEBUG
   try {
-    std::cout << "connecting to " << target_ip << ":" << target_port << "\n";
+    //std::cout << "connecting to " << target_ip << ":" << target_port << "\n";
     socket.lowest_layer().connect(endpoint);
-    std::cout << "connected, starting handshake\n";
+    //std::cout << "connected, starting handshake\n";
 
     // do handshake with tls and validate cert
     socket.handshake(asio::ssl::stream_base::client);
@@ -77,7 +77,7 @@ bool TransferSender::start() {
       std::cerr << "peer cert validation failed\n";
       return false;
     }
-    std::cout << "handshake done, sending offer\n";
+    //std::cout << "handshake done, sending offer\n";
   } catch (std::exception &e) {
     std::cerr << "connection failed: " << e.what() << "\n";
     unsigned long err;
@@ -90,22 +90,16 @@ bool TransferSender::start() {
   }
 
   // send a transfer offer
-  BaseHeader header;
-  header.magic = NT_MAGIC;
-  header.version = NT_VERSION;
-  header.msg_type = MessageType::TRANSFER_OFFER;
-  header.session_id = session_id;
-  header.header_crc = 0;
-
   OfferPayload payload;
   payload.file_size = file_size;
   payload.resume_offset = 0;
   memcpy(payload.sha256, sha256, 32);
   payload.file_name = std::filesystem::path(file_path).filename().string();
   payload.device_name = device_name;
-
   std::vector<uint8_t> serializedPayload = serializeOffer(payload);
-  header.payload_len = static_cast<uint32_t>(serializedPayload.size());
+
+  BaseHeader header;
+  buildHeader(MessageType::TRANSFER_OFFER, session_id, static_cast<uint32_t>(serializedPayload.size()), header);
   std::vector<uint8_t> message = serializeHeader(header);
   message.insert(message.end(), serializedPayload.begin(),
                  serializedPayload.end());
@@ -201,12 +195,7 @@ void TransferSender::sendNextChunk() {
   if (bytes_read > 0) {
     // keep on transfering
     BaseHeader header;
-    header.magic = NT_MAGIC;
-    header.version = NT_VERSION;
-    header.msg_type = MessageType::DATA_CHUNK;
-    header.session_id = session_id;
-    header.payload_len = static_cast<uint32_t>(bytes_read);
-    header.header_crc = 0;
+    buildHeader(MessageType::DATA_CHUNK, session_id, static_cast<uint32_t>(bytes_read), header);
 
     auto message =
         std::make_shared<std::vector<uint8_t>>(serializeHeader(header));
@@ -231,12 +220,7 @@ void TransferSender::sendNextChunk() {
     std::vector<uint8_t> payload = serializeDone(pd);
 
     BaseHeader header;
-    header.magic = NT_MAGIC;
-    header.version = NT_VERSION;
-    header.msg_type = MessageType::TRANSFER_DONE;
-    header.session_id = session_id;
-    header.payload_len = static_cast<uint32_t>(payload.size());
-    header.header_crc = 0;
+    buildHeader(MessageType::TRANSFER_DONE, session_id, static_cast<uint32_t>(payload.size()), header);
     std::vector<uint8_t> message = serializeHeader(header);
     message.insert(message.end(), payload.begin(), payload.end());
     asio::write(socket, asio::buffer(message));
@@ -427,12 +411,7 @@ void TransferReceiver::accept(uint64_t resume_offset) {
 
   // create header
   BaseHeader header;
-  header.magic = NT_MAGIC;
-  header.version = NT_VERSION;
-  header.msg_type = MessageType::TRANSFER_ACCEPT;
-  header.session_id = pending_session_id;
-  header.payload_len = 0;
-  header.header_crc = 0;
+  buildHeader(MessageType::TRANSFER_ACCEPT, pending_session_id, 0, header);
 
   // send accept, create file in downloads folder and prepare to receive data
   auto message =
@@ -467,12 +446,7 @@ void TransferReceiver::reject(RejectReason reason) {
   std::vector<uint8_t> payload = serializeReject(rp);
 
   BaseHeader header;
-  header.magic = NT_MAGIC;
-  header.version = NT_VERSION;
-  header.msg_type = MessageType::TRANSFER_REJECT;
-  header.session_id = pending_session_id;
-  header.payload_len = static_cast<uint32_t>(payload.size());
-  header.header_crc = 0;
+  buildHeader(MessageType::TRANSFER_REJECT, pending_session_id, static_cast<uint32_t>(payload.size()), header);
 
   auto message =
       std::make_shared<std::vector<uint8_t>>(serializeHeader(header));
@@ -547,16 +521,11 @@ void TransferReceiver::receiveNextChunk() {
 
           AckPayload ap;
           ap.checksum_ok = (memcmp(sha256, pending_offer.sha256, 32) == 0);
+          std::vector<uint8_t> ackPayload = serializeAck(ap);
 
           // send ack to sender
           BaseHeader ackHeader;
-          ackHeader.magic = NT_MAGIC;
-          ackHeader.version = NT_VERSION;
-          ackHeader.msg_type = MessageType::TRANSFER_ACK;
-          ackHeader.session_id = pending_session_id;
-          std::vector<uint8_t> ackPayload = serializeAck(ap);
-          ackHeader.header_crc = 0;
-          ackHeader.payload_len = static_cast<uint32_t>(ackPayload.size());
+          buildHeader(MessageType::TRANSFER_ACK, pending_session_id, static_cast<uint32_t>(ackPayload.size()), ackHeader);
           std::vector<uint8_t> ackMessage = serializeHeader(ackHeader);
           ackMessage.insert(ackMessage.end(), ackPayload.begin(),
                             ackPayload.end());

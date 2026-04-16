@@ -214,18 +214,12 @@ void DiscoveryService::listenForPackages() {
           DiscoveryPayload out;
           out.device_name = device_name;
           out.tcp_port = tcp_port;
-
           std::vector<uint8_t> payload = serializeDiscovery(out);
 
           BaseHeader baseOut;
-          baseOut.magic = NT_MAGIC;
-          baseOut.version = NT_VERSION;
-          baseOut.msg_type = MessageType::DISCOVERY_REPLY;
-          baseOut.session_id = 0; // no meaning in discovery mode
-          baseOut.payload_len = static_cast<uint32_t>(payload.size());
-          baseOut.header_crc = 0; // autofilled inside serialize
-
+          buildHeader(MessageType::DISCOVERY_REPLY, 0, static_cast<uint32_t>(payload.size()), baseOut);
           std::vector<uint8_t> message = serializeHeader(baseOut);
+          
           message.insert(message.end(), payload.begin(), payload.end());
 
           asio::ip::udp::endpoint endpoint(sender->address(),

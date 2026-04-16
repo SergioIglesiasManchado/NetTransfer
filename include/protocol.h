@@ -110,6 +110,9 @@ std::vector<uint8_t> serializeHeader(BaseHeader &header);
 // Returns false if magic, version, or CRC are invalid.
 bool deserializeHeader(const uint8_t *data, BaseHeader &out);
 
+// small function to ease the header construction
+void buildHeader(MessageType msg_type, uint64_t session_id, uint32_t payload_len, BaseHeader &out);
+
 // Payload serializers — return raw bytes ready to send after the header.
 std::vector<uint8_t> serializeOffer(const OfferPayload &p);
 std::vector<uint8_t> serializeReject(const RejectPayload &p);
