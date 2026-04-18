@@ -151,19 +151,15 @@ bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
   active_sender = std::make_shared<TransferSender>(io, client_ctx, target.ip,
                                                    target.tcp_port, file_path,
                                                    config.device_name);
-  // TODO sending trusted path, fix in the future
-  active_sender->setOnValidateCert(
-      [this, target](SSL *ssl, std::string device_name) {
-        return validatePeerCert(ssl, target.name);
-      });
-  if (onProgress)
-    active_sender->setOnProgress(onProgress);
+
+  if (onProgress) active_sender->setOnProgress(onProgress);
   active_sender->setOnComplete([this](bool success) {
-    if (onComplete)
-      onComplete(success);
+    if (onComplete) onComplete(success);
   });
-  bool sent = active_sender->start();
-  return sent;
+  asio::post(io, [this]() {
+        active_sender->start();
+  });
+  return true;
 }
 
 void NetTransfer::ensureCertExists() {

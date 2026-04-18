@@ -64,31 +64,29 @@ bool TransferSender::start() {
   asio::ip::tcp::endpoint endpoint(asio::ip::make_address(target_ip),
                                    target_port);
 
-  // TODO remove couts, just for DEBUG
-  try {
-    // std::cout << "connecting to " << target_ip << ":" << target_port << "\n";
-    socket.lowest_layer().connect(endpoint);
-    // std::cout << "connected, starting handshake\n";
+  socket.lowest_layer().async_connect(endpoint, [this](std::error_code ec) {
 
-    // do handshake with tls and validate cert
-    socket.handshake(asio::ssl::stream_base::client);
-    if (onValidateCert &&
-        !onValidateCert(socket.native_handle(), device_name)) {
-      std::cerr << "peer cert validation failed\n";
-      socket.lowest_layer().close();
-      return false;
-    }
-    // std::cout << "handshake done, sending offer\n";
-  } catch (std::exception &e) {
-    std::cerr << "connection failed: " << e.what() << "\n";
-    unsigned long err;
-    while ((err = ERR_get_error()) != 0) {
-      char buf[256];
-      ERR_error_string_n(err, buf, sizeof(buf));
-      std::cerr << "OpenSSL detail: " << buf << "\n";
-    }
-    return false;
-  }
+    if (ec) { std::cerr << "connect failed: " << ec.message() << "\n"; onComplete(false); return; }
+    std::cout << "connected, starting handshake\n";
+
+    socket.async_handshake(asio::ssl::stream_base::client, [this](std::error_code ec) {
+
+      if (ec) { std::cerr << "handshake failed: " << ec.message() << "\n"; onComplete(false); return; }
+      
+      /**  commented out, the sender is the one choosing the device, no need for extra security
+      if (onValidateCert && !onValidateCert(socket.native_handle(), device_name)) {
+          std::cerr << "peer cert validation failed\n"; onComplete(false); return;
+      }
+      */
+
+      // now send offer (move the offer-send + async_read logic here)
+      sendOffer();
+    });
+  });
+  return true;
+}
+
+void TransferSender::sendOffer() {
 
   // send a transfer offer
   OfferPayload payload;
@@ -110,48 +108,47 @@ bool TransferSender::start() {
 
   // wait for response (async wait)
   asio::async_read(
-      socket, asio::buffer(buffer, HEADER_SIZE),
-      [this](std::error_code ec, size_t bytes) {
+  socket, asio::buffer(buffer, HEADER_SIZE),
+  [this](std::error_code ec, size_t bytes) {
+    if (ec) {
+      std::cerr << ec.message() << "\n";
+      onComplete(false);
+      return;
+    }
+    // only header was read, check header
+    BaseHeader header;
+    deserializeHeader(buffer, header);
+    if (header.msg_type == MessageType::TRANSFER_ACCEPT) {
+      if (header.payload_len == 0) {
+        sendNextChunk();
+      } else {
+        // clear buffer in case of noise
+        asio::async_read(
+            socket, asio::buffer(buffer, header.payload_len),
+            [this](std::error_code ec, size_t bytes) { sendNextChunk(); });
+      }
+    } else if (header.msg_type == MessageType::TRANSFER_REJECT) {
+      asio::async_read(socket, asio::buffer(buffer, header.payload_len),
+      [this, header](std::error_code ec, size_t bytes) {
         if (ec) {
           std::cerr << ec.message() << "\n";
           onComplete(false);
           return;
         }
-        // only header was read, check header
-        BaseHeader header;
-        deserializeHeader(buffer, header);
-        if (header.msg_type == MessageType::TRANSFER_ACCEPT) {
-          if (header.payload_len == 0) {
-            sendNextChunk();
-          } else {
-            // clear buffer in case of noise
-            asio::async_read(
-                socket, asio::buffer(buffer, header.payload_len),
-                [this](std::error_code ec, size_t bytes) { sendNextChunk(); });
-          }
-        } else if (header.msg_type == MessageType::TRANSFER_REJECT) {
-          asio::async_read(socket, asio::buffer(buffer, header.payload_len),
-                           [this, header](std::error_code ec, size_t bytes) {
-                             if (ec) {
-                               std::cerr << ec.message() << "\n";
-                               onComplete(false);
-                               return;
-                             }
-                             RejectPayload rp;
-                             deserializeReject(buffer, header.payload_len,
-                                               rp); // we have reason for reject
-                             std::cerr << "transfer rejected: "
-                                       << static_cast<int>(rp.reason)
-                                       << "\n"; // for now logged
-                             onComplete(false);
-                             return;
-                           });
-        } else {
-          std::cerr << "unexpected header type\n";
-          return;
-        }
+        RejectPayload rp;
+        deserializeReject(buffer, header.payload_len,
+                          rp); // we have reason for reject
+        std::cerr << "transfer rejected: "
+                  << static_cast<int>(rp.reason)
+                  << "\n"; // for now logged
+        onComplete(false);
+        return;
       });
-  return true;
+    } else {
+      std::cerr << "unexpected header type\n";
+      return;
+    }
+  });
 }
 
 bool TransferSender::stop() {

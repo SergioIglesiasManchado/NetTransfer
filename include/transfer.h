@@ -31,6 +31,7 @@ private:
   uint8_t buffer[MAX_BUFFER_SIZE];
 
   void sendNextChunk();
+  void sendOffer();
   std::function<void(uint64_t, uint64_t)> onProgress;
   std::function<void(bool)> onComplete;
   std::function<bool(SSL*, std::string)> onValidateCert;
