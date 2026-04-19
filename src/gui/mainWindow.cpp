@@ -83,7 +83,21 @@ void MainWindow::onDeviceLeft(QString name, QString ip, uint16_t port) {
 void MainWindow::onOfferReceived(QString fileName, quint64 fileSize, QString senderName) {
 
     QString message = senderName + " wants to send you:\n" + fileName + 
-                      "\nSize: " + QString::number(fileSize) + " bytes";
+                      "\nSize: "; //+ QString::number(fileSize) + " bytes";
+    
+    float file_size_kb = fileSize / 1024;
+    float file_size_mb = file_size_kb / 1024;
+    float file_size_gb = file_size_mb / 1024;
+
+    if (file_size_gb > 1) {
+        message = message + QString::number(file_size_gb) + "GB";
+    } else if (file_size_mb > 1) {
+        message = message + QString::number(file_size_mb) + "MB";
+    } else if (file_size_kb > 1) {
+        message = message + QString::number(file_size_kb) + "KB";
+    } else {
+        message = message + QString::number(fileSize) + " bytes";
+    }
     
     QMessageBox::StandardButton reply = QMessageBox::question(
         this, "Incoming file", message,
@@ -92,12 +106,17 @@ void MainWindow::onOfferReceived(QString fileName, quint64 fileSize, QString sen
 
     if (reply == QMessageBox::Yes) {
         bridge->accept();
+        progressBar->setValue(0);
+        progressBar->show();
     } else {
         bridge->reject(RejectReason::USER_DECLINED);
     }
 }
 
 void MainWindow::onProgress(quint64 sent, quint64 total) {
+    progressBar->setMinimumHeight(24);
+    progressBar->setTextVisible(true);
+    progressBar->setFormat("%p%");
     progressBar->setValue((double)sent / total * 100);
 }
 
@@ -140,6 +159,7 @@ void MainWindow::onSendFile() {
     }
 
     // get the DiscoveredDevice that matches the selected item
+    log->append("Sending to: " + selected->text());
     auto devices = bridge->getDevices();
     QString selectedText = selected->text();
     for (auto &d : devices) {

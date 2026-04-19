@@ -161,6 +161,7 @@ void DiscoveryService::listenForPackages() {
         // check for errors in lambda
         if (ec) {
           std::cerr << ec.message() << "\n";
+          listenForPackages();
           return;
         }
         if (sender->address() == udp_socket.local_endpoint().address()) {

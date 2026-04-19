@@ -413,23 +413,23 @@ void TransferReceiver::accept(uint64_t resume_offset) {
   auto message =
       std::make_shared<std::vector<uint8_t>>(serializeHeader(header));
   asio::async_write(*socket, asio::buffer(*message),
-                    [this, message](std::error_code ec, size_t bytes) {
-                      if (ec) {
-                        std::cerr << "accept write error: " << ec.message()
-                                  << "\n";
-                        return;
-                      }
-                      std::filesystem::path downloads = getDownloadsFolder();
-                      std::filesystem::path filepath =
-                          resolveFilePath(downloads, pending_offer.file_name);
-                      file_path = filepath.string();
-                      file.open(filepath, std::ios::binary | std::ios::out);
-                      if (!file.is_open()) {
-                        std::cerr << "file couldn't be created\n";
-                        return;
-                      }
-                      receiveNextChunk();
-                    });
+    [this, message](std::error_code ec, size_t bytes) {
+      if (ec) {
+        std::cerr << "accept write error: " << ec.message()
+                  << "\n";
+        return;
+      }
+      std::filesystem::path downloads = getDownloadsFolder();
+      std::filesystem::path filepath =
+          resolveFilePath(downloads, pending_offer.file_name);
+      file_path = filepath.string();
+      file.open(filepath, std::ios::binary | std::ios::out);
+      if (!file.is_open()) {
+        std::cerr << "file couldn't be created\n";
+        return;
+      }
+      receiveNextChunk();
+    });
 }
 
 void TransferReceiver::reject(RejectReason reason) {
@@ -448,16 +448,16 @@ void TransferReceiver::reject(RejectReason reason) {
   message->insert(message->end(), payload.begin(), payload.end());
 
   asio::async_write(*socket, asio::buffer(*message),
-                    [this, message](std::error_code ec, size_t bytes) {
-                      if (ec) {
-                        std::cerr << "accept write error: " << ec.message()
-                                  << "\n";
-                        return;
-                      }
-                      socket->shutdown();
-                      socket->lowest_layer().close();
-                      listenForConnections(); // resume listening
-                    });
+  [this, message](std::error_code ec, size_t bytes) {
+    if (ec) {
+      std::cerr << "accept write error: " << ec.message()
+                << "\n";
+      return;
+    }
+    socket->shutdown();
+    socket->lowest_layer().close();
+    listenForConnections(); // resume listening
+  });
 }
 
 void TransferReceiver::receiveNextChunk() {
