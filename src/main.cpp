@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
     std::cout << "  Fingerprint: " << fingerprint << "\n";
     std::cout << "Type 't' to trust them (they will need to send the file again), or 'i' to ignore.\n";
     return true;
-});
+  });
 
   bool fine = net.start();
   if (!fine) {

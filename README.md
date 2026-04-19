@@ -48,7 +48,7 @@ Instead of holding the connection open indefinitely (which is vulnerable to hang
 
 for compiling on windows:
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
-cmake --build build
+cmake --build build --config Release
 
 check in linux if it compiles or not
 

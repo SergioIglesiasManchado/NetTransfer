@@ -395,6 +395,10 @@ void NetTransfer::setOnNewDevice(
   onNewDevice = callback;
 }
 
+std::string NetTransfer::getDeviceName() {
+  return config.device_name;
+}
+
 void NetTransfer::trustDevice() {
   if (!pending_trust_flag)
     return;

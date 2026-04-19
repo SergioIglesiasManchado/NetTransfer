@@ -42,7 +42,7 @@ class NetTransfer {
         std::shared_ptr<TransferSender> active_sender;
         asio::strand<asio::io_context::executor_type> strand; // for callbacks not stepping into each other
         std::thread io_thread;
-        std::string device_name;
+        //std::string device_name;
         uint16_t tcp_port;
         std::mutex state_mutex; // for getDevices and hasPendingTrust to not interfiere
 
