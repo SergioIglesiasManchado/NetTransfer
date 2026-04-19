@@ -34,7 +34,6 @@ Windows Defender Firewall → Inbound Rules → New Rule
 specify the firewall rules needed for both windows and linux (integrated on windows, explain for linux in readme)
 add resumable transfers (already defined, need to implement payload and sending)
 refactor code to be sustainable and readable
-delete all couts to console
 
 
 3. A Recommended "Middle Ground" (state right now = 3 sends needed for the actual send)
@@ -49,6 +48,8 @@ Instead of holding the connection open indefinitely (which is vulnerable to hang
 for compiling on windows:
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/AriochGuerrero/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
 cmake --build build --config Release
+
+then move the dlls to the folder
 
 check in linux if it compiles or not
 
