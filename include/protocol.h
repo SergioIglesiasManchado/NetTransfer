@@ -4,18 +4,18 @@
 #include <string>
 #include <vector>
 
-// ── Magic & Version
+// Magic / Version
 
-static constexpr uint32_t NT_MAGIC = 0x4E544652; // "LDRP"
+static constexpr uint32_t NT_MAGIC = 0x4E544652; // NTFR
 static constexpr uint8_t NT_VERSION = 1;
 
-// ── Ports
+// Ports
 
 static constexpr uint16_t UDP_DISCOVERY_PORT = 50000;
 static constexpr uint16_t TCP_PORT_MIN = 50001;
 static constexpr uint16_t TCP_PORT_MAX = 50100;
 
-// ── Message Types
+// Message Types
 
 enum class MessageType : uint8_t {
   DISCOVERY_BROADCAST = 0x01,
@@ -30,7 +30,7 @@ enum class MessageType : uint8_t {
   ERROR_MSG = 0x40,
 };
 
-// ── Reject / Error Reason Codes
+// Reject / Error Reason Codes
 
 enum class RejectReason : uint8_t {
   USER_DECLINED = 0x01,
@@ -66,7 +66,7 @@ struct BaseHeader {
   uint32_t header_crc;
 };
 
-// ── Payloads
+// Payloads
 
 struct OfferPayload {
   uint64_t file_size;
@@ -99,7 +99,7 @@ struct DiscoveryPayload {
   uint16_t tcp_port;
 };
 
-// ── Serialization / Deserialization
+// Serialization / Deserialization
 
 // Serializes a BaseHeader into exactly HEADER_SIZE bytes (network byte order).
 // Computes and writes the CRC automatically — pass header_crc = 0 before
@@ -131,6 +131,6 @@ bool deserializeError(const uint8_t *data, size_t len, ErrorPayload &out);
 bool deserializeDiscovery(const uint8_t *data, size_t len,
                           DiscoveryPayload &out);
 
-// ── CRC32
+// CRC32
 
 uint32_t crc32(const uint8_t *data, size_t len);

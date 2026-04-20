@@ -1,12 +1,12 @@
 #include <cstdint>
 #include <ios>
+#include <random>
 #ifdef _WIN32
-#include <shlobj.h>
+  #include <shlobj.h>
 #endif
 
 #include "protocol.h"
 #include "transfer.h"
-#include <random>
 
 std::filesystem::path getDownloadsFolder();
 std::filesystem::path resolveFilePath(const std::filesystem::path &dir,
@@ -71,13 +71,11 @@ bool TransferSender::start() {
 
     socket.async_handshake(asio::ssl::stream_base::client, [this](std::error_code ec) {
 
-      if (ec) { std::cerr << "handshake failed: " << ec.message() << "\n"; onComplete(false); return; }
-      
-      /**  commented out, the sender is the one choosing the device, no need for extra security
-      if (onValidateCert && !onValidateCert(socket.native_handle(), device_name)) {
-          std::cerr << "peer cert validation failed\n"; onComplete(false); return;
+      if (ec) {
+        std::cerr << "handshake failed: " << ec.message() << "\n";
+        onComplete(false);
+        return;
       }
-      */
 
       // now send offer (move the offer-send + async_read logic here)
       sendOffer();
@@ -115,19 +113,22 @@ void TransferSender::sendOffer() {
       onComplete(false);
       return;
     }
+
     // only header was read, check header
     BaseHeader header;
     deserializeHeader(buffer, header);
     if (header.msg_type == MessageType::TRANSFER_ACCEPT) {
+
       if (header.payload_len == 0) {
         sendNextChunk();
       } else {
         // clear buffer in case of noise
         asio::async_read(
-            socket, asio::buffer(buffer, header.payload_len),
-            [this](std::error_code ec, size_t bytes) { sendNextChunk(); });
+        socket, asio::buffer(buffer, header.payload_len),
+        [this](std::error_code ec, size_t bytes) { sendNextChunk(); });
       }
     } else if (header.msg_type == MessageType::TRANSFER_REJECT) {
+
       asio::async_read(socket, asio::buffer(buffer, header.payload_len),
       [this, header](std::error_code ec, size_t bytes) {
         if (ec) {
@@ -144,6 +145,7 @@ void TransferSender::sendOffer() {
         onComplete(false);
         return;
       });
+
     } else {
       std::cerr << "unexpected header type\n";
       return;
@@ -255,7 +257,6 @@ void TransferSender::sendNextChunk() {
           }
         });
       } else {
-
         // no ack? something went wrong, couldn't transfer
         std::cerr << "Expected ackwnoledge, received other\n";
       }
@@ -335,69 +336,69 @@ void TransferReceiver::listenForConnections() {
     }
 
     socket->async_handshake(
-        asio::ssl::stream_base::server, [this](std::error_code ec) {
-          // check for lambda error
-          
+    asio::ssl::stream_base::server, [this](std::error_code ec) {
+
+      // check for lambda error
+      if (ec) {
+        if (ec != asio::error::operation_aborted)
+          std::cerr << ec.message() << "\n";
+        return;
+      }
+
+      // expecting header, transfer offer
+      asio::async_read(
+      *socket, asio::buffer(buffer, HEADER_SIZE),
+      [this](std::error_code ec, size_t bytes) {
+        // lambda error handling
+        if (ec) {
+          std::cerr << ec.message() << "\n";
+          return;
+        }
+
+        // getting header data
+        BaseHeader header;
+        deserializeHeader(buffer, header);
+        if (header.msg_type != MessageType::TRANSFER_OFFER) {
+          // not expected
+          std::cerr << "received other than TRANSFER_OFFER\n";
+          return;
+        }
+        if (header.payload_len > MAX_BUFFER_SIZE - HEADER_SIZE) {
+          std::cerr << "payload too large\n";
+          return;
+        }
+        pending_session_id = header.session_id;
+
+        // reading payload
+        asio::async_read(
+        *socket,
+        asio::buffer(buffer + HEADER_SIZE, header.payload_len),
+        [this, header](std::error_code ec, size_t bytes) {
+          // lambda error handling
           if (ec) {
-            if (ec != asio::error::operation_aborted)
-              std::cerr << ec.message() << "\n";
+            std::cerr << ec.message() << "\n";
             return;
           }
 
-          // expecting header, transfer offer
-          asio::async_read(
-              *socket, asio::buffer(buffer, HEADER_SIZE),
-              [this](std::error_code ec, size_t bytes) {
-                // lambda error handling
-                if (ec) {
-                  std::cerr << ec.message() << "\n";
-                  return;
-                }
+          // reading payload, storing offer
+          OfferPayload op;
+          deserializeOffer(buffer + HEADER_SIZE, header.payload_len,
+                            op);
+          pending_offer = op;
+          file_size = pending_offer.file_size;
 
-                // getting header data
-                BaseHeader header;
-                deserializeHeader(buffer, header);
-                if (header.msg_type != MessageType::TRANSFER_OFFER) {
-                  // not expected
-                  std::cerr << "received other than TRANSFER_OFFER\n";
-                  return;
-                }
-                if (header.payload_len > MAX_BUFFER_SIZE - HEADER_SIZE) {
-                  std::cerr << "payload too large\n";
-                  return;
-                }
-                pending_session_id = header.session_id;
-
-                // reading payload
-                asio::async_read(
-                    *socket,
-                    asio::buffer(buffer + HEADER_SIZE, header.payload_len),
-                    [this, header](std::error_code ec, size_t bytes) {
-                      // lambda error handling
-                      if (ec) {
-                        std::cerr << ec.message() << "\n";
-                        return;
-                      }
-
-                      // reading payload, storing offer
-                      OfferPayload op;
-                      deserializeOffer(buffer + HEADER_SIZE, header.payload_len,
-                                       op);
-                      pending_offer = op;
-                      file_size = pending_offer.file_size;
-
-                      // validation
-                      if (onValidateCert &&
-                          !onValidateCert(socket->native_handle(),
-                                          op.device_name)) {
-                        socket->lowest_layer().close();
-                        listenForConnections();
-                        return;
-                      }
-                      onOffer(op);
-                    });
-              });
+          // validation
+          if (onValidateCert &&
+              !onValidateCert(socket->native_handle(),
+                              op.device_name)) {
+            socket->lowest_layer().close();
+            listenForConnections();
+            return;
+          }
+          onOffer(op);
         });
+      });
+    });
   });
 }
 
@@ -479,18 +480,18 @@ void TransferReceiver::receiveNextChunk() {
           // keep on receiving
           uint32_t to_read = header.payload_len;
           asio::async_read(*socket, asio::buffer(buffer + HEADER_SIZE, to_read),
-                           [this](std::error_code ec, size_t bytes) {
-                             if (ec) {
-                               std::cerr << ec.message() << "\n";
-                               return;
-                             }
-                             file.write(
-                                 reinterpret_cast<char *>(buffer + HEADER_SIZE),
-                                 bytes);
-                             bytes_sent += bytes;
-                             onProgress(bytes_sent, file_size);
-                             receiveNextChunk();
-                           });
+          [this](std::error_code ec, size_t bytes) {
+            if (ec) {
+              std::cerr << ec.message() << "\n";
+              return;
+            }
+            file.write(
+                reinterpret_cast<char *>(buffer + HEADER_SIZE),
+                bytes);
+            bytes_sent += bytes;
+            onProgress(bytes_sent, file_size);
+            receiveNextChunk();
+          });
         } else if (header.msg_type == MessageType::TRANSFER_DONE) {
 
           // nice, finished, close file and exit

@@ -10,6 +10,11 @@
 #include <QVBoxLayout>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QMessageBox>
+#include <QApplication>
+#include <QInputDialog>
+#include <QFile>
+#include <QCloseEvent>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT

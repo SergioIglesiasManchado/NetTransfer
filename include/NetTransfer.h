@@ -42,12 +42,11 @@ class NetTransfer {
         std::shared_ptr<TransferSender> active_sender;
         asio::strand<asio::io_context::executor_type> strand; // for callbacks not stepping into each other
         std::thread io_thread;
-        //std::string device_name;
         uint16_t tcp_port;
         std::mutex state_mutex; // for getDevices and hasPendingTrust to not interfiere
 
         Config config;
-        std::atomic<bool> pending_trust_flag{false};
+        std::atomic<bool> pending_trust_flag{false};  // for the trust model
         std::string pending_trust_fingerprint;
         std::string pending_trust_device_name;
         std::string config_directory_path;
@@ -58,6 +57,8 @@ class NetTransfer {
         bool loadConfig();
         bool saveConfig();
         std::string getConfigPath();
+
+        // callbacks
         std::function<void(DiscoveredDevice)> onDeviceFound;
         std::function<void(DiscoveredDevice)> onDeviceLeft;
         std::function<void(uint64_t, uint64_t)> onProgress;
@@ -82,6 +83,7 @@ class NetTransfer {
         bool hasPendingTrust();
         void ignorePendingTrust();
 
+        // callbacks
         void setOnDeviceFound(std::function<void(DiscoveredDevice)> callback);
         void setOnDeviceLeft(std::function<void(DiscoveredDevice)> callback);
         void setOnProgress(

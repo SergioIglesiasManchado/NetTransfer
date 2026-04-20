@@ -120,7 +120,6 @@ void DiscoveryService::startTimer() {
 void DiscoveryService::sendBroadcast() {
 
   try {
-
     // send discovery payload to the net
     BaseHeader base;
     base.magic = NT_MAGIC;
@@ -181,6 +180,7 @@ void DiscoveryService::listenForPackages() {
         }
         switch (base.msg_type) {
         case MessageType::DISCOVERY_BROADCAST: {
+          // case we receive a broadcast
           DiscoveryPayload dp;
           if (!deserializeDiscovery(buffer_incoming + HEADER_SIZE,
                                     base.payload_len, dp)) {
@@ -230,6 +230,7 @@ void DiscoveryService::listenForPackages() {
           break;
         }
         case MessageType::DISCOVERY_REPLY: {
+          // case someone is answering our broadcast
           DiscoveryPayload dp;
           if (!deserializeDiscovery(buffer_incoming + HEADER_SIZE,
                                     base.payload_len, dp)) {

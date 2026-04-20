@@ -26,6 +26,8 @@ add_executable(NetTransfer
     src/gui/mainWindow.cpp
     src/gui/NetTransferBridge.cpp
 
+    resources.qrc
+
     include/mainWindow.h
     include/NetTransferBridge.h
     # add more source files here as you create them

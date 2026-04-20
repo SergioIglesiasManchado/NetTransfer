@@ -1,10 +1,4 @@
 #include "mainWindow.h"
-#include <QFileDialog>
-#include <QMessageBox>
-#include <QApplication>
-#include <QInputDialog>
-#include <QFile>
-#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
@@ -123,7 +117,7 @@ void MainWindow::onProgress(quint64 sent, quint64 total) {
 
 void MainWindow::onTransferComplete(bool ok) {
     progressBar->hide();
-    log->append(ok ? "Transfer complete." : "Transfer failed.");
+    log->append(ok ? "Transfer complete." : "Transfer failed. The device may not trust you yet, wait for the receiver to trust your device");
 }
 
 void MainWindow::onNewDevice(QString fingerprint, QString name) {

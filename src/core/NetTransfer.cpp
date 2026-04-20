@@ -8,6 +8,8 @@ NetTransfer::NetTransfer()
 }
 
 NetTransfer::~NetTransfer() {
+
+  // control io thread shutdown
   if (io_thread.joinable()) {
     io.stop();
     io_thread.join();
@@ -34,7 +36,6 @@ bool NetTransfer::start() {
   receiver = std::make_unique<TransferReceiver>(io, ssl_ctx, config.tcp_port);
 
   // check if keys exist
-  // TODO change trusted_file path in future
   ensureCertExists();
 
   try {
@@ -60,13 +61,6 @@ bool NetTransfer::start() {
     return false;
   }
 
-  /** Dummy callback that lets the handshake finish so we can check the
-  fingerprint auto dummy_verify = [](bool preverify_ok,
-  asio::ssl::verify_context& ctx) {
-      // just tell openssl that we'll be verifying it, not him
-      return true;
-  };
-  */
   // for server
   ssl_ctx.set_verify_mode(asio::ssl::verify_peer |
                           asio::ssl::verify_client_once);
@@ -87,33 +81,39 @@ bool NetTransfer::start() {
         onDeviceFound(d);
     });
   });
+
   discovery->setOnDeviceLeft([this](DiscoveredDevice d) {
     asio::post(strand, [this, d]() {
       if (onDeviceLeft)
         onDeviceLeft(d);
     });
   });
+
   receiver->setOnOffer([this](OfferPayload op) {
     asio::post(strand, [this, op]() {
       if (onOffer)
         onOffer(op);
     });
   });
+
   receiver->setOnProgress([this](uint64_t bytes_sent, uint64_t total) {
     asio::post(strand, [this, bytes_sent, total]() {
       if (onProgress)
         onProgress(bytes_sent, total);
     });
   });
+
   receiver->setOnComplete([this](bool success) {
     asio::post(strand, [this, success]() {
       if (onComplete)
         onComplete(success);
     });
   });
+
   receiver->setOnValidateCert([this](SSL *ssl, std::string device_name) {
     return validatePeerCert(ssl, device_name);
   });
+
   // start discovery and receiver
   bool fine = discovery->start();
   if (!fine)
@@ -153,8 +153,6 @@ bool NetTransfer::stop() {
 bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
 
   // get device info from discoveryDevice, call callbacks and start sender
-  // TODO delete, is DEBUG
-  std::cout << "sending file called: " << file_path << "\n";
   active_sender = std::make_shared<TransferSender>(io, client_ctx, target.ip,
                                                    target.tcp_port, file_path,
                                                    config.device_name);
@@ -171,9 +169,21 @@ bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
 
 void NetTransfer::ensureCertExists() {
 
+  // we first check if the cert exists. if so, return, if not, generate
   if (std::filesystem::exists(config_directory_path + KEY_FILE) &&
-      std::filesystem::exists(config_directory_path + CERT_FILE)) {
-    return;
+  std::filesystem::exists(config_directory_path + CERT_FILE)) {
+
+    // check if cert is still valid
+    FILE *f = fopen((config_directory_path + CERT_FILE).c_str(), "rb");
+    X509 *cert = PEM_read_X509(f, nullptr, nullptr, nullptr);
+    fclose(f);
+    
+    int days_left = X509_cmp_current_time(X509_get_notAfter(cert));
+    X509_free(cert);
+    
+    if (days_left > 0)
+        return; // still valid
+    // else fall through and regenerate
   }
 
   // generate key file
@@ -285,7 +295,6 @@ bool NetTransfer::validatePeerCert(SSL *ssl, std::string device_name) {
   }
 
   // unknown device — queue for user decision, reject
-  // TODO if user sending, if validate device autosend again
   {
     std::lock_guard<std::mutex> lock(state_mutex);
     pending_trust_fingerprint = fingerprint;
@@ -299,6 +308,7 @@ bool NetTransfer::validatePeerCert(SSL *ssl, std::string device_name) {
 
 bool NetTransfer::loadConfig() {
 
+  // tries to load config from file, true if loaded, false if there's no config (or couldn't be loaded)
   std::ifstream f(config_directory_path + CONFIG_FILE);
   if (f.is_open()) {
     // load config
@@ -323,6 +333,7 @@ bool NetTransfer::loadConfig() {
 
 bool NetTransfer::saveConfig() {
 
+  // save config to config directory
   std::ofstream f(config_directory_path + CONFIG_FILE);
   if (!f.is_open()) {
     return false;
@@ -337,26 +348,27 @@ bool NetTransfer::saveConfig() {
 std::string NetTransfer::getConfigPath() {
 
   std::filesystem::path config_path;
-#ifdef _WIN32
-  // get for windows
-  PWSTR path = nullptr;
-  SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path);
-  config_path = std::filesystem::path(path) / "NetTransfer";
-  CoTaskMemFree(path);
-#else
-  // get for linux
-  const char *xdg = getenv("XDG_CONFIG_HOME");
-  if (xdg)
-    config_path = std::filesystem::path(xdg) / "NetTransfer";
-  else
-    config_path =
-        std::filesystem::path(getenv("HOME")) / ".config" / "NetTransfer";
-#endif
+  #ifdef _WIN32
+    // get for windows
+    PWSTR path = nullptr;
+    SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path);
+    config_path = std::filesystem::path(path) / "NetTransfer";
+    CoTaskMemFree(path);
+  #else
+    // get for linux
+    const char *xdg = getenv("XDG_CONFIG_HOME");
+    if (xdg)
+      config_path = std::filesystem::path(xdg) / "NetTransfer";
+    else
+      config_path =
+          std::filesystem::path(getenv("HOME")) / ".config" / "NetTransfer";
+  #endif
 
   std::filesystem::create_directories(config_path); // create if don't exist
   return (config_path / "").string();
 }
 
+// callbacks
 std::vector<DiscoveredDevice> NetTransfer::getDevices() {
   std::lock_guard<std::mutex> lock(state_mutex);
   return discovery->getDevices();
