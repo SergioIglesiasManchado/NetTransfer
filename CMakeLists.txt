@@ -14,6 +14,7 @@ if(WIN32)
     # Target Windows 10 or later (0x0A00)
     add_definitions(-D_WIN32_WINNT=0x0A00)
     add_definitions(-DWIN32_LEAN_AND_MEAN)
+
 endif()
 
 # ── Sources ──────────────────────────────────────────────────────────────
@@ -35,6 +36,10 @@ add_executable(NetTransfer
 add_executable(uninstall_rules src/uninstall_rules.cpp)
 
 set_target_properties(NetTransfer PROPERTIES WIN32_EXECUTABLE ON)
+
+if(WIN32)
+    target_sources(NetTransfer PRIVATE app.rc)
+endif()
 
 # ── Asio (header-only, standalone) ─────────────────────────────────────────────
 target_include_directories(NetTransfer PRIVATE

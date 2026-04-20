@@ -55,7 +55,11 @@ int main(int argc, char *argv[]) {
     window.resize(800, 500);
     window.show();
 
-    app.setWindowIcon(QIcon(":/resources/icon.png"));
+    #ifdef _WIN32
+      app.setWindowIcon(QIcon(":/resources/icon.ico"));
+    #else
+      app.setWindowIcon(QIcon(":/resources/icon.png"));
+    #endif
 
     return app.exec();
 }
