@@ -160,9 +160,10 @@ void DiscoveryService::listenForPackages() {
       [this, sender](std::error_code ec, size_t bytes) {
         // check for errors in lambda
         if (ec) {
-          std::cerr << ec.message() << "\n";
-          listenForPackages();
-          return;
+            if (ec != asio::error::operation_aborted)
+                std::cerr << ec.message() << "\n";
+            listenForPackages();
+            return;
         }
         if (sender->address() == udp_socket.local_endpoint().address()) {
           listenForPackages();

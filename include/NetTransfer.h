@@ -68,6 +68,7 @@ class NetTransfer {
 
     public:
         NetTransfer();
+        ~NetTransfer();
         bool start();
         bool stop();
         void accept();

@@ -198,16 +198,16 @@ void TransferSender::sendNextChunk() {
     message->insert(message->end(), buffer, buffer + bytes_read);
 
     asio::async_write(socket, asio::buffer(*message),
-                      [this, message](std::error_code ec, size_t bytes) {
-                        if (ec) {
-                          std::cerr << ec.message() << "\n";
-                          onComplete(false);
-                          return;
-                        }
-                        bytes_sent += bytes - HEADER_SIZE;
-                        onProgress(bytes_sent, file_size);
-                        sendNextChunk();
-                      });
+    [this, message](std::error_code ec, size_t bytes) {
+      if (ec) {
+        std::cerr << ec.message() << "\n";
+        onComplete(false);
+        return;
+      }
+      bytes_sent += bytes - HEADER_SIZE;
+      onProgress(bytes_sent, file_size);
+      sendNextChunk();
+    });
 
   } else {
     // finished transfer, sending done
@@ -224,40 +224,42 @@ void TransferSender::sendNextChunk() {
 
     // waiting for ack
     asio::async_read(socket, asio::buffer(buffer, HEADER_SIZE),
-                     [this](std::error_code ec, size_t bytes) {
-                       if (ec) {
-                         std::cerr << ec.message() << "\n";
-                         onComplete(false);
-                         return;
-                       }
-                       // got ack? check
-                       BaseHeader header;
-                       deserializeHeader(buffer, header);
-                       if (header.msg_type == MessageType::TRANSFER_ACK) {
+    [this](std::error_code ec, size_t bytes) {
+      if (ec) {
+        if (ec != asio::error::operation_aborted)
+          std::cerr << ec.message() << "\n";
+        onComplete(false);
+        return;
+      }
+      // got ack? check
+      BaseHeader header;
+      deserializeHeader(buffer, header);
+      if (header.msg_type == MessageType::TRANSFER_ACK) {
 
-                         // if ack, all seems nice
-                         asio::async_read(
-                             socket, asio::buffer(buffer, header.payload_len),
-                             [this, header](std::error_code ec, size_t bytes) {
-                               if (ec) {
-                                 std::cerr << ec.message() << "\n";
-                                 onComplete(false);
-                                 return;
-                               }
-                               AckPayload ap;
-                               deserializeAck(buffer, header.payload_len, ap);
-                               if (ap.checksum_ok) {
-                                 onComplete(true);
-                               } else {
-                                 std::cerr << "checksum invalid\n";
-                               }
-                             });
-                       } else {
+        // if ack, all seems nice
+        asio::async_read(
+        socket, asio::buffer(buffer, header.payload_len),
+        [this, header](std::error_code ec, size_t bytes) {
+          if (ec) {
+            if (ec != asio::error::operation_aborted)
+              std::cerr << ec.message() << "\n";
+            onComplete(false);
+            return;
+          }
+          AckPayload ap;
+          deserializeAck(buffer, header.payload_len, ap);
+          if (ap.checksum_ok) {
+            onComplete(true);
+          } else {
+            std::cerr << "checksum invalid\n";
+          }
+        });
+      } else {
 
-                         // no ack? something went wrong, couldn't transfer
-                         std::cerr << "Expected ackwnoledge, received other\n";
-                       }
-                     });
+        // no ack? something went wrong, couldn't transfer
+        std::cerr << "Expected ackwnoledge, received other\n";
+      }
+    });
   }
 }
 
@@ -326,21 +328,19 @@ void TransferReceiver::listenForConnections() {
   // acceptor async
   acceptor.async_accept(socket->lowest_layer(), [this](std::error_code ec) {
     if (ec) {
-      std::cerr << ec.message() << "\n";
+      if (ec != asio::error::operation_aborted)
+        std::cerr << ec.message() << "\n";
       listenForConnections();
+      return;
     }
 
     socket->async_handshake(
         asio::ssl::stream_base::server, [this](std::error_code ec) {
           // check for lambda error
+          
           if (ec) {
-            std::cerr << "handshake error: " << ec.message() << "\n";
-            unsigned long err;
-            while ((err = ERR_get_error()) != 0) {
-              char buf[256];
-              ERR_error_string_n(err, buf, sizeof(buf));
-              std::cerr << "OpenSSL detail: " << buf << "\n";
-            }
+            if (ec != asio::error::operation_aborted)
+              std::cerr << ec.message() << "\n";
             return;
           }
 

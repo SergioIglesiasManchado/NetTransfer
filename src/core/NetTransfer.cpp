@@ -7,6 +7,13 @@ NetTransfer::NetTransfer()
   config_directory_path = getConfigPath();
 }
 
+NetTransfer::~NetTransfer() {
+  if (io_thread.joinable()) {
+    io.stop();
+    io_thread.join();
+  }
+}
+
 bool NetTransfer::start() {
 
   // load config

@@ -1,5 +1,5 @@
 #include <QApplication>
-#include "MainWindow.h"
+#include "mainWindow.h"
 
 #ifdef _WIN32
 #include <cstdlib>

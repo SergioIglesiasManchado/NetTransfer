@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QInputDialog>
 #include <QFile>
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
@@ -172,4 +173,9 @@ void MainWindow::onSendFile() {
         }
     }
     log->append("Could not match selected device.");
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    bridge->stop();
+    event->accept();
 }
