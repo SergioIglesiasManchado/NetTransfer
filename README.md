@@ -23,11 +23,11 @@ Active development — beta. Core transfer functionality working on Windows and 
 - [Asio](https://think-async.com/Asio/) 1.28+ — async networking (standalone, no Boost)
 - [OpenSSL](https://openssl.org) 3.x — TLS + SHA-256
 - [Qt](https://www.qt.io) 6.x — GUI (LGPL)
-- [nlohmann/json](https://github.com/nlohmann/json) — config and trust store
+- [nlohmann/json](https://github.com/nlohmann/json) — config and trust
 
 ## Building
 toolchain_file path might change depending on how you install the requiered dependencies
-**Windows:**
+**Windows (using vcpkg package manager):**
 ```bash
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
 cmake --build build --config Release
