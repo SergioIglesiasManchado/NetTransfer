@@ -47,3 +47,7 @@ cmake --build build --config Release
 |------|----------|---------|
 | 50000 | UDP | Device discovery |
 | 50001–50100 | TCP | File transfer |
+
+## Images
+
+![Screenshot](resources/ejemplo1.png)

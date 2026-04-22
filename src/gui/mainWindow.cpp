@@ -123,7 +123,7 @@ void MainWindow::onProgress(quint64 sent, quint64 total) {
 
 void MainWindow::onTransferComplete(bool ok) {
     progressBar->hide();
-    log->append(ok ? "Transfer complete." : "Transfer failed. The device may not trust you yet, wait for the receiver to trust your device");
+    log->append(ok ? "Transfer complete. File located in Downloads" : "Transfer failed. The device may not trust you yet, wait for the receiver to trust your device");
 }
 
 void MainWindow::onNewDevice(QString fingerprint, QString name) {
