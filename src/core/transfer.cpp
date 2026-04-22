@@ -453,10 +453,14 @@ void TransferReceiver::reject(RejectReason reason) {
     if (ec) {
       std::cerr << "accept write error: " << ec.message()
                 << "\n";
-      return;
     }
-    socket->shutdown();
-    socket->lowest_layer().close();
+    try {
+      socket->shutdown();
+    } catch (...) {}
+    try {
+      socket->lowest_layer().close();
+    } catch(...) {}
+    
     listenForConnections(); // resume listening
   });
 }

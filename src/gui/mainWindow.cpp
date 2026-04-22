@@ -31,6 +31,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     splitter->addWidget(leftWidget);
     splitter->addWidget(rightWidget);
 
+    // modify device list
+    deviceList->setIconSize(QSize(32, 32));
+    deviceList->setSpacing(4);
+
     setCentralWidget(splitter);
 
     // button
@@ -67,7 +71,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 }
 
 void MainWindow::onDeviceFound(QString name, QString ip, uint16_t port) {
-    deviceList->addItem(name + " - " + ip);
+    QListWidgetItem *item = new QListWidgetItem(name + " - " + ip);
+    item->setSizeHint(QSize(0, 48));
+    deviceList->addItem(item);
 }
 
 void MainWindow::onDeviceLeft(QString name, QString ip, uint16_t port) {
@@ -172,4 +178,71 @@ void MainWindow::onSendFile() {
 void MainWindow::closeEvent(QCloseEvent *event) {
     bridge->stop();
     event->accept();
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dragMoveEvent(QDragMoveEvent *event) {
+    QPoint localPos = deviceList->mapFromGlobal(mapToGlobal(event->position().toPoint()));
+    QListWidgetItem *item = deviceList->itemAt(localPos);
+    if (item) {
+        deviceList->setCurrentItem(item);
+        event->acceptProposedAction();
+    } else {
+        deviceList->clearSelection();
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event) {
+
+    QString file_path = event->mimeData()->urls().first().toLocalFile();
+    if (file_path.isEmpty()) {
+        return;
+    }
+    QPoint localPos = deviceList->mapFromGlobal(mapToGlobal(event->position().toPoint()));
+    QListWidgetItem *item = deviceList->itemAt(localPos);
+
+    if (item) {
+        // dropped on a device, send directly
+        auto devices = bridge->getDevices();
+        for (auto &d : devices) {
+            if (item->text() == QString::fromStdString(d.name) + " - " + QString::fromStdString(d.ip)) {
+                bridge->sendFile(d, file_path.toStdString());
+                log->append("Sending " + file_path + " to " + QString::fromStdString(d.name) + "...");
+                progressBar->show();
+                progressBar->setValue(0);
+                return;
+            }
+        }
+    } else {
+        // dropped elsewhere, ask which device
+        auto devices = bridge->getDevices();
+        if (devices.empty()) {
+            log->append("No devices available.");
+            return;
+        }
+        QStringList deviceNames;
+        for (auto &d : devices)
+            deviceNames << QString::fromStdString(d.name) + " - " + QString::fromStdString(d.ip);
+
+        bool ok;
+        QString selected = QInputDialog::getItem(this, "Select device", 
+                           "Send to:", deviceNames, 0, false, &ok);
+        if (!ok) return;
+
+        for (auto &d : devices) {
+            if (selected == QString::fromStdString(d.name) + " - " + QString::fromStdString(d.ip)) {
+                bridge->sendFile(d, file_path.toStdString());
+                log->append("Sending " + file_path + " to " + QString::fromStdString(d.name) + "...");
+                progressBar->show();
+                progressBar->setValue(0);
+                return;
+            }
+        }
+    }
 }

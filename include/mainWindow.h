@@ -15,6 +15,9 @@
 #include <QInputDialog>
 #include <QFile>
 #include <QCloseEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -39,4 +42,7 @@ class MainWindow : public QMainWindow {
     
     protected:
         void closeEvent(QCloseEvent *event) override;
+        void dragEnterEvent(QDragEnterEvent *event) override;
+        void dragMoveEvent(QDragMoveEvent *event) override;
+        void dropEvent(QDropEvent *event) override;
 };
