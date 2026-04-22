@@ -73,7 +73,6 @@ find_package(OpenSSL REQUIRED)
 target_link_libraries(NetTransfer PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
 # QT
-set(Qt6_DIR "C:/Users/AriochGuerrero/vcpkg/installed/x64-windows/share/Qt6")
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 target_link_libraries(NetTransfer PRIVATE Qt6::Core Qt6::Widgets)
 
