@@ -34,8 +34,10 @@ add_executable(NetTransfer
     # add more source files here as you create them
 )
 add_executable(uninstall_rules src/uninstall_rules.cpp)
+add_executable(launcher WIN32 src/launcher.cpp app.rc)
 
 set_target_properties(NetTransfer PROPERTIES WIN32_EXECUTABLE ON)
+set_target_properties(launcher PROPERTIES WIN32_EXECUTABLE ON)
 
 if(WIN32)
     target_sources(NetTransfer PRIVATE app.rc)
