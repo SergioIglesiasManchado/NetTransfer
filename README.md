@@ -27,6 +27,7 @@ Active development — beta. Core transfer functionality working on Windows and 
 
 ## Building
 toolchain_file path might change depending on how you install the requiered dependencies
+
 **Windows (using vcpkg package manager):**
 ```bash
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
