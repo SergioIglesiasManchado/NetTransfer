@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#include <mutex>
 
 // time between searchs in seconds
 #define SEARCH_LOOP 5
@@ -27,6 +28,7 @@ private:
   std::vector<DiscoveredDevice> discoveredDevices;
   asio::steady_timer timer;
   uint8_t buffer_incoming[BUFFER_MAX_SIZE];
+  std::mutex devices_mutex;
 
   void listenForPackages();
   void sendBroadcast();

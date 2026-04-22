@@ -76,20 +76,23 @@ bool DiscoveryService::stop() {
 
 std::vector<DiscoveredDevice> DiscoveryService::getDevices() {
 
-  // get actual time
-  std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-
-  // if last seen > WAIT_TIME
-  for (int i = 0; i < discoveredDevices.size(); i++) {
-    if ((discoveredDevices[i].last_seen + std::chrono::seconds(WAIT_TIME)) <
-        now) {
-      DiscoveredDevice dd = discoveredDevices[i];
-      discoveredDevices.erase(discoveredDevices.begin() + i);
-      onDeviceLeft(dd); // trigger ondeviceleft to warn higher lvl
-      i--;
+  // store devices for callback later
+  std::vector<DiscoveredDevice> expired;
+  {
+    // lock state, do changes
+    std::lock_guard<std::mutex> lock(devices_mutex);
+    auto now = std::chrono::steady_clock::now();
+    for (int i = 0; i < (int)discoveredDevices.size(); i++) {
+      if ((discoveredDevices[i].last_seen + std::chrono::seconds(WAIT_TIME)) < now) {
+        expired.push_back(discoveredDevices[i]);
+        discoveredDevices.erase(discoveredDevices.begin() + i);
+        i--;
+      }
     }
-  }
-
+  } // lock released 
+  for (auto &d : expired)
+    onDeviceLeft(d);
+  std::lock_guard<std::mutex> lock(devices_mutex);
   return discoveredDevices;
 }
 
@@ -197,7 +200,10 @@ void DiscoveryService::listenForPackages() {
           bool deviceInList = false;
           for (int i = 0; i < discoveredDevices.size(); i++) {
             if (discoveredDevices[i].name == dp.device_name) {
-              discoveredDevices[i].last_seen = std::chrono::steady_clock::now();
+              {
+                std::lock_guard<std::mutex> lock(devices_mutex);
+                discoveredDevices[i].last_seen = std::chrono::steady_clock::now();
+              }
               deviceInList = true;
               break;
             }
@@ -208,7 +214,10 @@ void DiscoveryService::listenForPackages() {
             dd.tcp_port = dp.tcp_port;
             dd.ip = sender->address().to_string();
             dd.last_seen = std::chrono::steady_clock::now();
-            discoveredDevices.push_back(dd);
+            {
+                std::lock_guard<std::mutex> lock(devices_mutex);
+                discoveredDevices.push_back(dd); // only once, inside the lock
+            }
             onDeviceFound(dd);
           }
 
@@ -246,7 +255,10 @@ void DiscoveryService::listenForPackages() {
           bool deviceInList = false;
           for (int i = 0; i < discoveredDevices.size(); i++) {
             if (discoveredDevices[i].name == dp.device_name) {
-              discoveredDevices[i].last_seen = std::chrono::steady_clock::now();
+              {
+                std::lock_guard<std::mutex> lock(devices_mutex);
+                discoveredDevices[i].last_seen = std::chrono::steady_clock::now();
+              }
               deviceInList = true;
               break;
             }
@@ -257,7 +269,10 @@ void DiscoveryService::listenForPackages() {
             dd.tcp_port = dp.tcp_port;
             dd.ip = sender->address().to_string();
             dd.last_seen = std::chrono::steady_clock::now();
-            discoveredDevices.push_back(dd);
+            {
+              std::lock_guard<std::mutex> lock(devices_mutex);
+              discoveredDevices.push_back(dd); // only once, inside the lock
+            }
             onDeviceFound(dd);
           }
           break;
