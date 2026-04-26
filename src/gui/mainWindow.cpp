@@ -81,7 +81,10 @@ void MainWindow::onDeviceFound(QString name, QString ip, uint16_t port) {
 
 void MainWindow::onDeviceLeft(QString name, QString ip, uint16_t port) {
     auto items = deviceList->findItems(name + " - " + ip, Qt::MatchExactly);
-    for (auto item : items) delete item;
+    for (auto item : items) {
+        deviceList->takeItem(deviceList->row(item));
+        delete item;
+    }
 }
 
 void MainWindow::onOfferReceived(QString fileName, quint64 fileSize, QString senderName) {

@@ -39,12 +39,6 @@ bool NetTransferBridge::start() {
         }, Qt::QueuedConnection);
     });
 
-    /** 
-    net.setOnFirstRun([this]() {
-        return net.getDeviceName();
-    });
-    */
-
     net.setOnNewDevice([this](std::string fingerprint, std::string name) {
         QMetaObject::invokeMethod(this, [this, fingerprint, name]() {
             emit newDevicePending(QString::fromStdString(fingerprint), QString::fromStdString(name));

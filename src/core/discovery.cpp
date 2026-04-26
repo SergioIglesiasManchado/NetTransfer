@@ -101,7 +101,6 @@ void DiscoveryService::startTimer() {
       return;
     sendBroadcast();
     checkExpiredDevices();
-    std::cout << "timer fired\n";
     startTimer();
   });
 }
