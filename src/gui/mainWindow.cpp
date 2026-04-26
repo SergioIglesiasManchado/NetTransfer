@@ -51,8 +51,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(bridge, &NetTransferBridge::transferComplete, this, &MainWindow::onTransferComplete);
     connect(bridge, &NetTransferBridge::newDevicePending, this, &MainWindow::onNewDevice);
 
-    // start
-    bridge->start();
+    // set drag and drop
+    setAcceptDrops(true);
 
     // if first run, ask for name
     while (bridge->getDeviceName().isEmpty()) {
@@ -67,6 +67,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             bridge->setDeviceName(name.trimmed());
         }
     }
+
+    // start
+    bridge->start();
 
 }
 
@@ -121,9 +124,9 @@ void MainWindow::onProgress(quint64 sent, quint64 total) {
     progressBar->setValue((double)sent / total * 100);
 }
 
-void MainWindow::onTransferComplete(bool ok) {
+void MainWindow::onTransferComplete(bool ok, QString file_path) {
     progressBar->hide();
-    log->append(ok ? "Transfer complete. File located in Downloads" : "Transfer failed. The device may not trust you yet, wait for the receiver to trust your device");
+    log->append(ok ? "Transfer complete. File located in " + file_path : "Transfer failed. The device may not trust you yet, wait for the receiver to trust your device");
 }
 
 void MainWindow::onNewDevice(QString fingerprint, QString name) {

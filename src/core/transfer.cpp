@@ -66,14 +66,14 @@ bool TransferSender::start() {
 
   socket.lowest_layer().async_connect(endpoint, [this](std::error_code ec) {
 
-    if (ec) { std::cerr << "connect failed: " << ec.message() << "\n"; onComplete(false); return; }
+    if (ec) { std::cerr << "connect failed: " << ec.message() << "\n"; onComplete(false, ""); return; }
     std::cout << "connected, starting handshake\n";
 
     socket.async_handshake(asio::ssl::stream_base::client, [this](std::error_code ec) {
 
       if (ec) {
         std::cerr << "handshake failed: " << ec.message() << "\n";
-        onComplete(false);
+        onComplete(false, file_path);
         return;
       }
 
@@ -110,7 +110,7 @@ void TransferSender::sendOffer() {
   [this](std::error_code ec, size_t bytes) {
     if (ec) {
       std::cerr << ec.message() << "\n";
-      onComplete(false);
+      onComplete(false, file_path);
       return;
     }
 
@@ -133,7 +133,7 @@ void TransferSender::sendOffer() {
       [this, header](std::error_code ec, size_t bytes) {
         if (ec) {
           std::cerr << ec.message() << "\n";
-          onComplete(false);
+          onComplete(false, file_path);
           return;
         }
         RejectPayload rp;
@@ -142,7 +142,7 @@ void TransferSender::sendOffer() {
         std::cerr << "transfer rejected: "
                   << static_cast<int>(rp.reason)
                   << "\n"; // for now logged
-        onComplete(false);
+        onComplete(false, file_path);
         return;
       });
 
@@ -175,7 +175,7 @@ void TransferSender::setOnProgress(
   onProgress = callback;
 }
 
-void TransferSender::setOnComplete(std::function<void(bool)> callback) {
+void TransferSender::setOnComplete(std::function<void(bool, std::string)> callback) {
   onComplete = callback;
 }
 
@@ -203,7 +203,7 @@ void TransferSender::sendNextChunk() {
     [this, message](std::error_code ec, size_t bytes) {
       if (ec) {
         std::cerr << ec.message() << "\n";
-        onComplete(false);
+        onComplete(false, file_path);
         return;
       }
       bytes_sent += bytes - HEADER_SIZE;
@@ -230,7 +230,7 @@ void TransferSender::sendNextChunk() {
       if (ec) {
         if (ec != asio::error::operation_aborted)
           std::cerr << ec.message() << "\n";
-        onComplete(false);
+        onComplete(false, file_path);
         return;
       }
       // got ack? check
@@ -245,13 +245,13 @@ void TransferSender::sendNextChunk() {
           if (ec) {
             if (ec != asio::error::operation_aborted)
               std::cerr << ec.message() << "\n";
-            onComplete(false);
+            onComplete(false, file_path);
             return;
           }
           AckPayload ap;
           deserializeAck(buffer, header.payload_len, ap);
           if (ap.checksum_ok) {
-            onComplete(true);
+            onComplete(true, file_path);
           } else {
             std::cerr << "checksum invalid\n";
           }
@@ -472,7 +472,10 @@ void TransferReceiver::receiveNextChunk() {
       *socket, asio::buffer(buffer, HEADER_SIZE),
       [this](std::error_code ec, size_t bytes) {
         if (ec) {
+          cleanupFailedTransfer();
+          onComplete(false, "");
           std::cerr << ec.message() << "\n";
+          listenForConnections();
           return;
         }
 
@@ -486,7 +489,10 @@ void TransferReceiver::receiveNextChunk() {
           asio::async_read(*socket, asio::buffer(buffer + HEADER_SIZE, to_read),
           [this](std::error_code ec, size_t bytes) {
             if (ec) {
+              cleanupFailedTransfer();
+              onComplete(false, "");
               std::cerr << ec.message() << "\n";
+              listenForConnections();
               return;
             }
             file.write(
@@ -533,15 +539,28 @@ void TransferReceiver::receiveNextChunk() {
           asio::write(*socket, asio::buffer(ackMessage));
 
           // notify UI
-          onComplete(ap.checksum_ok);
           file.close();
+          if (!ap.checksum_ok) 
+            std::filesystem::remove(file_path);
+          onComplete(ap.checksum_ok, file_path);
 
           listenForConnections(); // resume listening
         } else {
           std::cerr << "unexpected msg when receiving packet\n";
+          cleanupFailedTransfer();
+          onComplete(false, "");
+          listenForConnections();
           return;
         }
       });
+}
+
+void TransferReceiver::cleanupFailedTransfer() {
+  if (file.is_open())
+        file.close();
+    if (!file_path.empty() && std::filesystem::exists(file_path))
+        std::filesystem::remove(file_path);
+    file_path.clear();
 }
 
 std::filesystem::path getDownloadsFolder() {
@@ -552,13 +571,32 @@ std::filesystem::path getDownloadsFolder() {
   CoTaskMemFree(path); // must free after use
   return downloads;
 #else
+  // xdg variable?
   const char *xdg = getenv("XDG_DOWNLOAD_DIR");
-  if (xdg)
+  if (xdg && std::filesystem::is_directory(xdg))
     return std::filesystem::path(xdg);
-  const char *home = getenv("HOME");
-  if (home)
-    return std::filesystem::path(home) / "Downloads";
-  return std::filesystem::path("."); // fallback, shouldn't happen
+
+  // xdg user variable?
+  FILE *pipe = popen("xdg-user-dir DOWNLOAD", "r");
+  if (pipe) {
+    char line[512] = {};
+    if (fgets(line, sizeof(line), pipe)) {
+      pclose(pipe);
+      std::string p(line);
+      if (!p.empty() && p.back() == '\n')
+        p.pop_back();
+      std::filesystem::path candidate(p);
+      // xdg-user-dir returns $HOME when the key is unset
+      const char *home_env = getenv("HOME");
+      if (std::filesystem::is_directory(candidate) &&
+          (!home_env || candidate != std::filesystem::path(home_env)))
+        return candidate;
+    } else {
+      pclose(pipe);
+    }
+  }
+
+  return std::filesystem::path("."); // shouldnt happen
 #endif
 }
 
@@ -582,7 +620,7 @@ void TransferReceiver::setOnProgress(
   onProgress = callback;
 }
 
-void TransferReceiver::setOnComplete(std::function<void(bool)> callback) {
+void TransferReceiver::setOnComplete(std::function<void(bool, std::string)> callback) {
   onComplete = callback;
 }
 

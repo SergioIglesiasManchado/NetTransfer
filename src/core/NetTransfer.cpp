@@ -5,6 +5,7 @@ NetTransfer::NetTransfer()
     : ssl_ctx(asio::ssl::context::tls), client_ctx(asio::ssl::context::tls),
       strand(asio::make_strand(io)) {
   config_directory_path = getConfigPath();
+  loadConfig();
 }
 
 NetTransfer::~NetTransfer() {
@@ -19,15 +20,9 @@ NetTransfer::~NetTransfer() {
 bool NetTransfer::start() {
 
   // load config
-  bool loaded = loadConfig();
-  if (!loaded) {
-    // first run — ask user for name via callback
-    if (onFirstRun) {
-      config.device_name = onFirstRun();
-    } else {
-      config.device_name = "NetTransfer"; // fallback default
-    }
-    config.tcp_port = TCP_PORT_MIN; // autopicks port
+  if (config.device_name.empty()) {
+    config.device_name = "NetTransfer"; // safety fallback only
+    config.tcp_port = TCP_PORT_MIN;
   }
 
   // initialize discovery and receiver after getting tcp port from config
@@ -103,10 +98,10 @@ bool NetTransfer::start() {
     });
   });
 
-  receiver->setOnComplete([this](bool success) {
-    asio::post(strand, [this, success]() {
+  receiver->setOnComplete([this](bool success, std::string path) {
+    asio::post(strand, [this, success, path]() {
       if (onComplete)
-        onComplete(success);
+        onComplete(success, path);
     });
   });
 
@@ -158,8 +153,8 @@ bool NetTransfer::sendFile(DiscoveredDevice target, std::string file_path) {
                                                    config.device_name);
 
   if (onProgress) active_sender->setOnProgress(onProgress);
-  active_sender->setOnComplete([this](bool success) {
-    if (onComplete) onComplete(success);
+  active_sender->setOnComplete([this](bool success, std::string file_path) {
+    if (onComplete) onComplete(success, "");
   });
   asio::post(io, [this]() {
         active_sender->start();
@@ -397,7 +392,7 @@ void NetTransfer::setOnProgress(
   onProgress = callback;
 }
 
-void NetTransfer::setOnComplete(std::function<void(bool)> callback) {
+void NetTransfer::setOnComplete(std::function<void(bool, std::string)> callback) {
   onComplete = callback;
 }
 
@@ -448,6 +443,8 @@ void NetTransfer::setDeviceName(std::string new_device_name) {
 
   // change name
   config.device_name = new_device_name;
+  if (discovery)
+    discovery->setDeviceName(new_device_name);
 
   // update config file
   bool check;

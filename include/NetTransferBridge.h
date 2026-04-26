@@ -27,6 +27,6 @@ class NetTransferBridge : public QObject {
         void deviceLeft(QString name, QString ip, uint16_t port);
         void offerReceived(QString fileName, quint64 fileSize, QString senderName);
         void progressUpdated(quint64 sent, quint64 total);
-        void transferComplete(bool ok);
+        void transferComplete(bool ok, QString filePath);
         void newDevicePending(QString fingerprint, QString name);
 };

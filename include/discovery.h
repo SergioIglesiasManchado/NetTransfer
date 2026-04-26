@@ -33,6 +33,7 @@ private:
   void listenForPackages();
   void sendBroadcast();
   void startTimer();
+  void checkExpiredDevices();
   std::function<void(DiscoveredDevice)> onDeviceFound;
   std::function<void(DiscoveredDevice)> onDeviceLeft;
 
@@ -42,6 +43,7 @@ public:
   bool start();
   bool stop();
   std::vector<DiscoveredDevice> getDevices();
+  void setDeviceName(const std::string &name);
   void setTcpPort(uint16_t port);
   void setOnDeviceFound(std::function<void(DiscoveredDevice)> callback);
   void setOnDeviceLeft(std::function<void(DiscoveredDevice)> callback);

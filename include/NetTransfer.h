@@ -62,7 +62,7 @@ class NetTransfer {
         std::function<void(DiscoveredDevice)> onDeviceFound;
         std::function<void(DiscoveredDevice)> onDeviceLeft;
         std::function<void(uint64_t, uint64_t)> onProgress;
-        std::function<void(bool)> onComplete;
+        std::function<void(bool, std::string)> onComplete;
         std::function<void(OfferPayload)> onOffer;
         std::function<bool(std::string fingerprint, std::string device_name)> onNewDevice;
         std::function<std::string()> onFirstRun;
@@ -88,7 +88,7 @@ class NetTransfer {
         void setOnDeviceLeft(std::function<void(DiscoveredDevice)> callback);
         void setOnProgress(
             std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
-        void setOnComplete(std::function<void(bool success)> callback);
+        void setOnComplete(std::function<void(bool success, std::string file_path)> callback);
         void setOnOffer(std::function<void(OfferPayload)> callback);
         void setOnNewDevice(std::function<bool(std::string, std::string)> callback);
         void setOnFirstRun(std::function<std::string()> callback);

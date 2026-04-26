@@ -33,7 +33,7 @@ private:
   void sendNextChunk();
   void sendOffer();
   std::function<void(uint64_t, uint64_t)> onProgress;
-  std::function<void(bool)> onComplete;
+  std::function<void(bool, std::string)> onComplete;
   std::function<bool(SSL*, std::string)> onValidateCert;
 
 public:
@@ -43,7 +43,7 @@ public:
 
   void setOnProgress(
       std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
-  void setOnComplete(std::function<void(bool success)> callback);
+  void setOnComplete(std::function<void(bool success, std::string file_path)> callback);
   void setOnValidateCert(std::function<bool(SSL*, std::string)> callback);
 
   bool start();
@@ -70,8 +70,9 @@ private:
 
   void listenForConnections();
   void receiveNextChunk();
+  void cleanupFailedTransfer();
   std::function<void(uint64_t, uint64_t)> onProgress;
-  std::function<void(bool)> onComplete;
+  std::function<void(bool, std::string)> onComplete;
   std::function<void(OfferPayload)> onOffer;
   std::function<bool(SSL*, std::string)> onValidateCert;
 
@@ -81,7 +82,7 @@ public:
 
   void setOnProgress(
       std::function<void(uint64_t bytes_sent, uint64_t total)> callback);
-  void setOnComplete(std::function<void(bool success)> callback);
+  void setOnComplete(std::function<void(bool success, std::string file_path)> callback);
   void setOnOffer(std::function<void(OfferPayload)> callback);
   void setOnValidateCert(std::function<bool(SSL*, std::string)> callback);
   void accept(uint64_t resume_offset);

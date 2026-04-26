@@ -33,7 +33,7 @@ class MainWindow : public QMainWindow {
         void onDeviceLeft(QString name, QString ip, uint16_t port);
         void onOfferReceived(QString fileName, quint64 fileSize, QString senderName);
         void onProgress(quint64 sent, quint64 total);
-        void onTransferComplete(bool ok);
+        void onTransferComplete(bool ok, QString file_path);
         void onNewDevice(QString fingerprint, QString name);
         void onSendFile();
 

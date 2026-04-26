@@ -76,22 +76,6 @@ bool DiscoveryService::stop() {
 
 std::vector<DiscoveredDevice> DiscoveryService::getDevices() {
 
-  // store devices for callback later
-  std::vector<DiscoveredDevice> expired;
-  {
-    // lock state, do changes
-    std::lock_guard<std::mutex> lock(devices_mutex);
-    auto now = std::chrono::steady_clock::now();
-    for (int i = 0; i < (int)discoveredDevices.size(); i++) {
-      if ((discoveredDevices[i].last_seen + std::chrono::seconds(WAIT_TIME)) < now) {
-        expired.push_back(discoveredDevices[i]);
-        discoveredDevices.erase(discoveredDevices.begin() + i);
-        i--;
-      }
-    }
-  } // lock released 
-  for (auto &d : expired)
-    onDeviceLeft(d);
   std::lock_guard<std::mutex> lock(devices_mutex);
   return discoveredDevices;
 }
@@ -116,8 +100,28 @@ void DiscoveryService::startTimer() {
     if (ec)
       return;
     sendBroadcast();
+    checkExpiredDevices();
+    std::cout << "timer fired\n";
     startTimer();
   });
+}
+
+void DiscoveryService::checkExpiredDevices() {
+
+  std::vector<DiscoveredDevice> expired;
+  {
+    std::lock_guard<std::mutex> lock(devices_mutex);
+    auto now = std::chrono::steady_clock::now();
+    for (int i = 0; i < (int)discoveredDevices.size(); i++) {
+      if ((discoveredDevices[i].last_seen + std::chrono::seconds(WAIT_TIME)) < now) {
+        expired.push_back(discoveredDevices[i]);
+        discoveredDevices.erase(discoveredDevices.begin() + i);
+        i--;
+      }
+    }
+  }
+  for (auto &d : expired)
+    onDeviceLeft(d);
 }
 
 void DiscoveryService::sendBroadcast() {
@@ -289,3 +293,7 @@ void DiscoveryService::listenForPackages() {
 }
 
 void DiscoveryService::setTcpPort(uint16_t port) { this->tcp_port = port; }
+
+void DiscoveryService::setDeviceName(const std::string &name) {
+  device_name = name;
+}

@@ -33,15 +33,17 @@ bool NetTransferBridge::start() {
         }, Qt::QueuedConnection);
     });
 
-    net.setOnComplete([this](bool ok) {
-        QMetaObject::invokeMethod(this, [this, ok]() {
-            emit transferComplete(ok);
+    net.setOnComplete([this](bool ok, std::string path) {
+        QMetaObject::invokeMethod(this, [this, ok, path]() {
+            emit transferComplete(ok, QString::fromStdString(path));
         }, Qt::QueuedConnection);
     });
 
+    /** 
     net.setOnFirstRun([this]() {
         return net.getDeviceName();
     });
+    */
 
     net.setOnNewDevice([this](std::string fingerprint, std::string name) {
         QMetaObject::invokeMethod(this, [this, fingerprint, name]() {
